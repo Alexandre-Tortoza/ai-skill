@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use crate::{DriftState, ValidationState};
+use crate::{DriftState, SkillMode, ValidationState};
 use serde::Serialize;
 
 /// Whether a skill is installed globally or scoped to a project.
@@ -31,6 +31,8 @@ pub struct Skill {
     pub tags: Vec<String>,
     /// Whether ai-skill considers this skill under its management.
     pub managed: bool,
+    /// User-chosen operating mode (active / name-only / disabled).
+    pub mode: SkillMode,
     /// Current health state.
     pub validation: ValidationState,
     /// Raw SKILL.md content, if loaded.
@@ -51,6 +53,7 @@ mod tests {
             agents: vec!["claude".to_string()],
             tags: vec![],
             managed: false,
+            mode: SkillMode::Active,
             validation: ValidationState::Valid,
             manifest_content: None,
             drift_state: DriftState::default(),
