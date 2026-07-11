@@ -1,8 +1,9 @@
 //! Application state, view transitions, and event handling.
 
 use ai_skill_core::{
-    AnyCatalogGateway, CatalogEntry, Profile, ProfileOp, ProfileStore, ScanFinding, Scope, Skill,
-    SkillCreator, SkillInstaller, SkillToggler, SkillWriter, ValidationState, scan_skill,
+    AnyCatalogGateway, CatalogEntry, ContextBudget, Profile, ProfileOp, ProfileStore, ScanFinding,
+    Scope, Skill, SkillCreator, SkillInstaller, SkillToggler, SkillWriter, ValidationState,
+    calculate_budget, scan_skill,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::path::PathBuf;
@@ -23,6 +24,7 @@ pub enum View {
     CreateWizard,
     Editor,
     Audit,
+    Budget,
 }
 
 /// Steps in the create-skill wizard.
@@ -207,6 +209,7 @@ pub struct App<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> {
     pub writer: Box<dyn SkillWriter>,
     pub create_wizard_state: CreateWizardState,
     pub editor_state: Option<EditorState>,
+    pub budget: ContextBudget,
     pub should_quit: bool,
 }
 
@@ -221,8 +224,10 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
         writer: Box<dyn SkillWriter>,
     ) -> Self {
         let profiles = profile_store.list().unwrap_or_default();
+        let budget = calculate_budget(&all_skills);
         Self {
             all_skills,
+            budget,
             view: View::List,
             view_before_confirm: View::List,
             list_state: ListUiState::new(),
@@ -318,6 +323,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 View::CreateWizard => self.handle_create_wizard_key(key),
                 View::Editor => self.handle_editor_key(key),
                 View::Audit => self.handle_audit_key(key),
+                View::Budget => self.handle_audit_key(key),
             },
             AppEvent::Resize => {}
         }
@@ -529,6 +535,9 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     });
                     self.view = View::Editor;
                 }
+            }
+            KeyCode::Char('B') => {
+                self.view = View::Budget;
             }
             KeyCode::Char('A') => {
                 self.view = View::Audit;

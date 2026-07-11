@@ -1,6 +1,6 @@
 //! Panel showing full details of a single skill.
 
-use ai_skill_core::{DriftState, Scope, Skill};
+use ai_skill_core::{DriftState, Scope, Skill, estimate_skill_cost};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -19,7 +19,7 @@ pub fn render_detail_panel(skill: &Skill, scroll: u16, area: Rect, frame: &mut F
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
 
-    let chunks = Layout::vertical([Constraint::Length(5), Constraint::Min(0)]).split(inner);
+    let chunks = Layout::vertical([Constraint::Length(6), Constraint::Min(0)]).split(inner);
 
     // Metadata section
     let scope_str = match skill.scope {
@@ -37,6 +37,8 @@ pub fn render_detail_panel(skill: &Skill, scroll: u16, area: Rect, frame: &mut F
     } else {
         val_badge
     };
+
+    let cost = estimate_skill_cost(skill);
 
     let drift_line = match &skill.drift_state {
         DriftState::UpdateAvailable {
@@ -80,6 +82,16 @@ pub fn render_detail_panel(skill: &Skill, scroll: u16, area: Rect, frame: &mut F
                 Style::default().add_modifier(Modifier::BOLD),
             ),
             Span::styled(val_str, fg(val_color)),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                "budget:     ",
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(format!(
+                "{} chars  ~{} tok",
+                cost.char_count, cost.estimated_tokens
+            )),
         ]),
         drift_line,
     ]);

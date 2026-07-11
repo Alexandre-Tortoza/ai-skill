@@ -1,6 +1,6 @@
 //! Audit report that groups skills by health category.
 
-use crate::{DriftState, Skill, ValidationState};
+use crate::{ContextBudget, DriftState, Skill, ValidationState, calculate_budget};
 
 /// A snapshot of skill health, grouping them into actionable categories.
 pub struct AuditReport<'a> {
@@ -12,6 +12,8 @@ pub struct AuditReport<'a> {
     pub no_agents: Vec<&'a Skill>,
     /// Skills where an upstream update is available.
     pub update_available: Vec<&'a Skill>,
+    /// Context budget estimate across all skills.
+    pub budget: ContextBudget,
 }
 
 /// Produces an [`AuditReport`] from a slice of skills.
@@ -44,7 +46,10 @@ pub fn audit_skills(skills: &[Skill]) -> AuditReport<'_> {
         }
     }
 
+    let budget = calculate_budget(skills);
+
     AuditReport {
+        budget,
         broken,
         duplicates,
         no_agents,

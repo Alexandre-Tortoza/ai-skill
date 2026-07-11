@@ -5,6 +5,7 @@
 //! duplicate detection, and skill scaffolding.
 
 pub mod audit;
+pub mod budget;
 pub mod catalog;
 pub mod creator;
 pub mod drift;
@@ -19,6 +20,11 @@ pub mod validation;
 
 /// Report grouping skills by their health category.
 pub use audit::{AuditReport, audit_skills};
+/// Context budget estimation types and functions.
+pub use budget::{
+    BudgetWarning, ContextBudget, SkillCost, calculate_budget, classify_budget,
+    estimate_skill_cost,
+};
 /// Port for querying a remote skill catalog.
 pub use catalog::{AnyCatalogGateway, CatalogEntry};
 /// Ports and helpers for creating and editing skill manifests.
