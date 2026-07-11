@@ -9,7 +9,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
-use super::style_helpers::{badge_for_validation, fg};
+use super::style_helpers::{badge_for_mode, badge_for_validation, fg};
 
 /// Renders the full detail view for a single skill (scrollable).
 pub fn render_detail_panel(skill: &Skill, scroll: u16, area: Rect, frame: &mut Frame) {
@@ -19,7 +19,7 @@ pub fn render_detail_panel(skill: &Skill, scroll: u16, area: Rect, frame: &mut F
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
 
-    let chunks = Layout::vertical([Constraint::Length(6), Constraint::Min(0)]).split(inner);
+    let chunks = Layout::vertical([Constraint::Length(7), Constraint::Min(0)]).split(inner);
 
     // Metadata section
     let scope_str = match skill.scope {
@@ -36,6 +36,13 @@ pub fn render_detail_panel(skill: &Skill, scroll: u16, area: Rect, frame: &mut F
         "valid"
     } else {
         val_badge
+    };
+
+    let (mode_badge, mode_color) = badge_for_mode(&skill.mode);
+    let mode_str = if mode_badge.is_empty() {
+        "active"
+    } else {
+        mode_badge
     };
 
     let cost = estimate_skill_cost(skill);
@@ -85,6 +92,13 @@ pub fn render_detail_panel(skill: &Skill, scroll: u16, area: Rect, frame: &mut F
         ]),
         Line::from(vec![
             Span::styled(
+                "mode:       ",
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(mode_str, fg(mode_color)),
+        ]),
+        Line::from(vec![
+            Span::styled(
                 "budget:     ",
                 Style::default().add_modifier(Modifier::BOLD),
             ),
@@ -111,6 +125,7 @@ pub fn render_detail_panel(skill: &Skill, scroll: u16, area: Rect, frame: &mut F
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ai_skill_core::SkillMode;
     use ai_skill_core::ValidationState;
     use ratatui::{Terminal, backend::TestBackend};
     use std::path::PathBuf;
@@ -123,6 +138,7 @@ mod tests {
             agents: vec!["claude".to_string()],
             tags: vec![],
             managed: false,
+            mode: SkillMode::Active,
             validation,
             manifest_content: content.map(str::to_string),
             drift_state: ai_skill_core::DriftState::default(),

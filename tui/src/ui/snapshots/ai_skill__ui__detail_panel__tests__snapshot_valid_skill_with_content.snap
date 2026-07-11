@@ -1,6 +1,5 @@
 ---
 source: tui/src/ui/detail_panel.rs
-assertion_line: 159
 expression: terminal.backend().buffer().clone()
 ---
 Buffer {
@@ -11,12 +10,12 @@ Buffer {
         "│agents:     claude                                        │",
         "│path:       /tmp/my-skill                                 │",
         "│validation: valid                                         │",
+        "│mode:       active                                        │",
         "│budget:     40 chars  ~10 tok                             │",
         "│                                                          │",
         "│# My Skill                                                │",
         "│                                                          │",
         "│Does something useful.                                    │",
-        "│                                                          │",
         "│                                                          │",
         "│                                                          │",
         "│                                                          │",
@@ -34,5 +33,7 @@ Buffer {
         x: 13, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 1, y: 5, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
         x: 13, y: 5, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 1, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 13, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
     ]
 }
