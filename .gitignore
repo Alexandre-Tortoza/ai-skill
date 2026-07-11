@@ -1,0 +1,16 @@
+/target/
+
+# Local environment and secrets
+config/*.env
+*.env
+!.env.example
+!config/*.env.example
+
+# Editor and OS noise
+.DS_Store
+*.swp
+*.swo
+
+# Local tool output
+*.profraw
+*.profdata

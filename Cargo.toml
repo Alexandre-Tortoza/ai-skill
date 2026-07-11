@@ -1,0 +1,13 @@
+[workspace]
+members = ["core", "adapters", "tui"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+rust-version = "1.95"
+repository = "https://github.com/alexmrtr/ai-skill"
+homepage = "https://github.com/alexmrtr/ai-skill"
+keywords = ["ai", "agents", "skills", "tui", "cli"]
+categories = ["command-line-utilities", "development-tools"]
