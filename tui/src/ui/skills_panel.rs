@@ -46,7 +46,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn make_skill(name: &str, scope: Scope) -> Skill {
-        use ai_skill_core::{DriftState, ValidationState};
+        use ai_skill_core::{DriftState, SkillMode, ValidationState};
         Skill {
             name: name.to_string(),
             path: PathBuf::from("/tmp").join(name),
@@ -54,6 +54,7 @@ mod tests {
             agents: vec![],
             tags: vec![],
             managed: false,
+            mode: SkillMode::Active,
             validation: ValidationState::Valid,
             manifest_content: None,
             drift_state: DriftState::default(),

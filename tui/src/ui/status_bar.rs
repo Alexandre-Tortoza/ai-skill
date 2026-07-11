@@ -16,7 +16,7 @@ pub fn render_status_bar(
 ) {
     let hints = match view {
         View::List => {
-            "j/k  d dis  e edit  r rm  u up  a adopt  c new  A audit  B budget  s search  ? quit"
+            "j/k  d dis  e edit  n name  r rm  u up  a adopt  c new  A aud  B bud  s srch  ? quit"
         }
         View::Detail => "j/k scroll  Esc back  q quit",
         View::Search => "type search  j/k move  Enter install  Esc back",

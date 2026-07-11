@@ -79,7 +79,7 @@ fn render_preview(state: &EditorState, area: Rect, frame: &mut Frame) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ai_skill_core::{Scope, Skill, ValidationState};
+    use ai_skill_core::{Scope, Skill, SkillMode, ValidationState};
     use ratatui::{Terminal, backend::TestBackend};
     use std::path::PathBuf;
 
@@ -91,6 +91,7 @@ mod tests {
             agents: vec!["claude".to_string()],
             tags: vec![],
             managed: false,
+            mode: SkillMode::Active,
             validation: ValidationState::Valid,
             manifest_content: Some("# body text\n".into()),
             drift_state: ai_skill_core::DriftState::default(),
