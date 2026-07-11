@@ -1,0 +1,21 @@
+[package]
+name = "ai-skill-adapters"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Filesystem, process and git adapters for the ai-skill TUI."
+readme = "../README.md"
+
+[dependencies]
+ai-skill-core = { path = "../core", version = "0.1.0" }
+notify = "6"
+serde_norway = "0.9"
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"
