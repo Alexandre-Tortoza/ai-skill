@@ -69,15 +69,26 @@ pub enum BudgetWarning {
 
 /// Estimates the character cost of a single skill.
 ///
-/// Cost = length of manifest content (if present) + length of agent names.
+/// Cost depends on the skill's operating mode:
+/// - `Active`    → length of manifest content (if present) + length of agent names.
+/// - `NameOnly`  → only the skill's name (plus a small formatting overhead).
+/// - `Disabled`  → zero (the skill is off and consumes no budget).
 pub fn estimate_skill_cost(skill: &Skill) -> SkillCost {
-    let content_len = skill
-        .manifest_content
-        .as_deref()
-        .map(str::len)
-        .unwrap_or(0);
-    let agents_len: usize = skill.agents.iter().map(|a| a.len()).sum();
-    let char_count = content_len + agents_len;
+    let char_count = match skill.mode {
+        crate::SkillMode::Active => {
+            let content_len = skill
+                .manifest_content
+                .as_deref()
+                .map(str::len)
+                .unwrap_or(0);
+            let agents_len: usize = skill.agents.iter().map(|a| a.len()).sum();
+            content_len + agents_len
+        }
+        crate::SkillMode::NameOnly => {
+            skill.name.len() + 20 // formatting overhead for the name-only entry
+        }
+        crate::SkillMode::Disabled => 0,
+    };
     SkillCost {
         name: skill.name.clone(),
         char_count,
@@ -110,7 +121,7 @@ pub fn classify_budget(budget: &ContextBudget) -> BudgetWarning {
     if budget.usage_ratio >= 1.0 {
         // Count skills that would need to be removed to get back under budget.
         let mut sorted: Vec<&SkillCost> = budget.skill_costs.iter().collect();
-        sorted.sort_by(|a, b| b.char_count.cmp(&a.char_count));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.char_count));
         let mut cum = 0usize;
         let mut cut = 0usize;
         // Count from largest to smallest until we are under budget (very rough).
@@ -142,7 +153,7 @@ pub fn classify_budget(budget: &ContextBudget) -> BudgetWarning {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DriftState, Scope, ValidationState};
+    use crate::{DriftState, Scope, SkillMode, ValidationState};
     use std::path::PathBuf;
 
     fn skill(name: &str, content: Option<&str>, agents: Vec<&str>) -> Skill {
@@ -153,6 +164,7 @@ mod tests {
             agents: agents.into_iter().map(str::to_string).collect(),
             tags: vec![],
             managed: true,
+            mode: SkillMode::Active,
             validation: ValidationState::Valid,
             manifest_content: content.map(str::to_string),
             drift_state: DriftState::default(),
@@ -278,5 +290,23 @@ mod tests {
         assert_eq!(cost.name, "name");
         assert_eq!(cost.char_count, 19); // "content"(7) + "agent1"(6) + "agent2"(6)
         assert_eq!(cost.estimated_tokens, 4);
+    }
+
+    #[test]
+    fn name_only_skill_only_counts_name() {
+        let mut s = skill("my-skill", Some("very long description that would normally cost a lot"), vec!["claude", "codex"]);
+        s.mode = SkillMode::NameOnly;
+        let cost = estimate_skill_cost(&s);
+        assert_eq!(cost.name, "my-skill");
+        assert_eq!(cost.char_count, 28); // "my-skill"(8) + overhead(20)
+    }
+
+    #[test]
+    fn disabled_skill_costs_zero() {
+        let mut s = skill("off", Some("content"), vec!["claude"]);
+        s.mode = SkillMode::Disabled;
+        let cost = estimate_skill_cost(&s);
+        assert_eq!(cost.char_count, 0);
+        assert_eq!(cost.estimated_tokens, 0);
     }
 }
