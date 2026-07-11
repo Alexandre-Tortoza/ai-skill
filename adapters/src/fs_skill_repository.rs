@@ -1,8 +1,8 @@
 //! Filesystem-based [`SkillRepository`] that scans `~/.claude/skills/` directories.
 
 use ai_skill_core::{
-    DriftState, Scope, Skill, SkillRepository, ValidationState, detect_duplicates, extract_body,
-    parse_frontmatter,
+    DriftState, Scope, Skill, SkillMode, SkillRepository, ValidationState, detect_duplicates,
+    extract_body, parse_frontmatter,
 };
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -69,12 +69,13 @@ impl FsSkillRepository {
                 if entry_path.is_dir() {
                     skills.push(Skill {
                         name: base.to_string(),
-                        path: entry_path,
+                        path: entry_path.clone(),
                         scope: scope.clone(),
                         agents: vec![],
                         tags: vec![],
                         managed: false,
-                        validation: ValidationState::Disabled,
+                        mode: SkillMode::Disabled,
+                        validation: ValidationState::Valid,
                         manifest_content: None,
                         drift_state: DriftState::default(),
                     });
@@ -92,6 +93,7 @@ impl FsSkillRepository {
                         agents: vec![],
                         tags: vec![],
                         managed: false,
+                        mode: SkillMode::Active,
                         validation: ValidationState::BrokenSymlink,
                         manifest_content: None,
                         drift_state: DriftState::default(),
@@ -115,6 +117,7 @@ impl FsSkillRepository {
                         agents: vec![],
                         tags: vec![],
                         managed: false,
+                        mode: SkillMode::Active,
                         validation: ValidationState::MissingManifest,
                         manifest_content: None,
                         drift_state: DriftState::default(),
@@ -133,6 +136,7 @@ impl FsSkillRepository {
                         agents: vec![],
                         tags: vec![],
                         managed: false,
+                        mode: SkillMode::Active,
                         validation: ValidationState::InvalidFrontmatter {
                             reason: e.to_string(),
                         },
@@ -149,6 +153,7 @@ impl FsSkillRepository {
                 ValidationState::Valid
             };
 
+            let mode = detect_mode(&canonical);
             let manifest_content = extract_body(&content).map(str::to_owned);
 
             skills.push(Skill {
@@ -158,6 +163,7 @@ impl FsSkillRepository {
                 agents: metadata.agents,
                 tags: metadata.tags,
                 managed: canonical.join(".ai-skill").exists(),
+                mode,
                 validation,
                 manifest_content,
                 drift_state: DriftState::default(),
@@ -165,6 +171,15 @@ impl FsSkillRepository {
         }
 
         Ok(skills)
+    }
+}
+
+/// Detects the skill's operating mode from filesystem markers.
+fn detect_mode(path: &Path) -> SkillMode {
+    if path.join(".name-only").exists() {
+        SkillMode::NameOnly
+    } else {
+        SkillMode::Active
     }
 }
 
@@ -403,7 +418,7 @@ mod tests {
     }
 
     #[test]
-    fn disabled_dir_gets_disabled_state() {
+    fn disabled_dir_gets_disabled_mode() {
         let tmp = TempDir::new().unwrap();
         let global = tmp.path().join("global");
         fs::create_dir_all(global.join("alpha.disabled")).unwrap();
@@ -412,8 +427,38 @@ mod tests {
         let skills = repo.list().unwrap();
 
         assert_eq!(skills.len(), 1);
-        assert_eq!(skills[0].validation, ValidationState::Disabled);
+        assert_eq!(skills[0].mode, SkillMode::Disabled);
+        assert_eq!(skills[0].validation, ValidationState::Valid);
         assert_eq!(skills[0].name, "alpha");
+    }
+
+    #[test]
+    fn name_only_marker_sets_name_only_mode() {
+        let tmp = TempDir::new().unwrap();
+        let global = tmp.path().join("global");
+        write_skill(&global, "collapsed", &["claude"]);
+        std::fs::write(global.join("collapsed").join(".name-only"), "").unwrap();
+
+        let repo = FsSkillRepository::new(global, None);
+        let skills = repo.list().unwrap();
+
+        assert_eq!(skills.len(), 1);
+        assert_eq!(skills[0].mode, SkillMode::NameOnly);
+        assert_eq!(skills[0].name, "collapsed");
+        assert!(skills[0].manifest_content.is_some());
+    }
+
+    #[test]
+    fn skill_without_name_only_marker_is_active() {
+        let tmp = TempDir::new().unwrap();
+        let global = tmp.path().join("global");
+        write_skill(&global, "full", &[]);
+
+        let repo = FsSkillRepository::new(global, None);
+        let skills = repo.list().unwrap();
+
+        assert_eq!(skills.len(), 1);
+        assert_eq!(skills[0].mode, SkillMode::Active);
     }
 
     #[test]
