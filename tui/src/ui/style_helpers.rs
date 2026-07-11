@@ -1,6 +1,6 @@
 //! Colour helpers that respect `NO_COLOR` conventions.
 
-use ai_skill_core::{DriftState, ValidationState};
+use ai_skill_core::{DriftState, SkillMode, ValidationState};
 use ratatui::style::{Color, Style};
 
 /// Returns `true` if the `NO_COLOR` environment variable is set and non-empty.
@@ -50,7 +50,15 @@ pub fn badge_for_validation(state: &ValidationState) -> (&'static str, Color) {
         ValidationState::InvalidFrontmatter { .. } => ("[bad-frontmatter]", Color::Yellow),
         ValidationState::OrphanLock => ("[orphan-lock]", Color::Magenta),
         ValidationState::Duplicate { .. } => ("[duplicate]", Color::Cyan),
-        ValidationState::Disabled => ("[disabled]", Color::DarkGray),
+    }
+}
+
+/// Returns `(badge_text, colour)` for a given skill mode.
+pub fn badge_for_mode(mode: &SkillMode) -> (&'static str, Color) {
+    match mode {
+        SkillMode::Active => ("", Color::Reset),
+        SkillMode::NameOnly => ("[name-only]", Color::Blue),
+        SkillMode::Disabled => ("[disabled]", Color::DarkGray),
     }
 }
 
@@ -102,13 +110,6 @@ mod tests {
     }
 
     #[test]
-    fn disabled_returns_dark_gray() {
-        let (badge, color) = badge_for_validation(&ValidationState::Disabled);
-        assert_eq!(badge, "[disabled]");
-        assert_eq!(color, Color::DarkGray);
-    }
-
-    #[test]
     fn duplicate_returns_cyan() {
         let (_, color) = badge_for_validation(&ValidationState::Duplicate {
             conflicts_with: PathBuf::from("/other"),
@@ -138,6 +139,27 @@ mod tests {
     fn drift_badge_unknown_returns_none() {
         use ai_skill_core::DriftState;
         assert!(drift_badge(&DriftState::Unknown).is_none());
+    }
+
+    #[test]
+    fn badge_for_mode_active_returns_empty() {
+        let (badge, color) = badge_for_mode(&SkillMode::Active);
+        assert!(badge.is_empty());
+        assert_eq!(color, Color::Reset);
+    }
+
+    #[test]
+    fn badge_for_mode_name_only_returns_blue() {
+        let (badge, color) = badge_for_mode(&SkillMode::NameOnly);
+        assert_eq!(badge, "[name-only]");
+        assert_eq!(color, Color::Blue);
+    }
+
+    #[test]
+    fn badge_for_mode_disabled_returns_dark_gray() {
+        let (badge, color) = badge_for_mode(&SkillMode::Disabled);
+        assert_eq!(badge, "[disabled]");
+        assert_eq!(color, Color::DarkGray);
     }
 
     #[test]

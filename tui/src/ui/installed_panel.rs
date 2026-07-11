@@ -10,7 +10,7 @@ use ratatui::{
 
 use crate::app::ListUiState;
 
-use super::style_helpers::{badge_for_validation, drift_badge, fg};
+use super::style_helpers::{badge_for_mode, badge_for_validation, drift_badge, fg};
 
 /// Renders the main scrollable skill list with badges and a filter header.
 pub fn render_installed_panel(
@@ -32,14 +32,27 @@ pub fn render_installed_panel(
                 Scope::Project => "[project]",
             };
             let (val_badge, val_color) = badge_for_validation(&s.validation);
+            let (mode_badge, mode_color) = badge_for_mode(&s.mode);
             let db = drift_badge(&s.drift_state);
-            let text = match (val_badge.is_empty(), db) {
-                (true, None) => format!("{} {}", s.name, scope_badge),
-                (false, None) => format!("{} {} {}", s.name, scope_badge, val_badge),
-                (true, Some((d, _))) => format!("{} {} {}", s.name, scope_badge, d),
-                (false, Some((d, _))) => format!("{} {} {} {}", s.name, scope_badge, val_badge, d),
+
+            let mut parts = vec![s.name.clone(), scope_badge.to_string()];
+            if !mode_badge.is_empty() {
+                parts.push(mode_badge.to_string());
+            }
+            if !val_badge.is_empty() {
+                parts.push(val_badge.to_string());
+            }
+            if let Some((d, _)) = db {
+                parts.push(d.to_string());
+            }
+            let text = parts.join(" ");
+
+            let color = if !mode_badge.is_empty() {
+                mode_color
+            } else {
+                val_color
             };
-            ListItem::new(text).style(fg(val_color))
+            ListItem::new(text).style(fg(color))
         })
         .collect();
 
@@ -59,6 +72,7 @@ pub fn render_installed_panel(
 mod tests {
     use super::*;
     use crate::app::{ListUiState, ScopeFilter};
+    use ai_skill_core::SkillMode;
     use ai_skill_core::ValidationState;
     use ratatui::{Terminal, backend::TestBackend};
     use std::path::PathBuf;
@@ -71,6 +85,7 @@ mod tests {
             agents: vec![],
             tags: vec![],
             managed: false,
+            mode: SkillMode::Active,
             validation,
             manifest_content: None,
             drift_state: ai_skill_core::DriftState::default(),
@@ -155,6 +170,24 @@ mod tests {
         let state = default_state();
         let rendered = render(&[&skill], &state);
         assert!(!rendered.contains('↑'));
+    }
+
+    #[test]
+    fn name_only_skill_shows_name_only_badge() {
+        let mut skill = make_skill("collapsed", Scope::Global, ValidationState::Valid);
+        skill.mode = SkillMode::NameOnly;
+        let state = default_state();
+        let rendered = render(&[&skill], &state);
+        assert!(rendered.contains("name-only"));
+    }
+
+    #[test]
+    fn disabled_skill_shows_disabled_badge() {
+        let mut skill = make_skill("off", Scope::Global, ValidationState::Valid);
+        skill.mode = SkillMode::Disabled;
+        let state = default_state();
+        let rendered = render(&[&skill], &state);
+        assert!(rendered.contains("disabled"));
     }
 
     #[test]
