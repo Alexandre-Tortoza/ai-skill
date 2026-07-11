@@ -12,6 +12,7 @@ pub mod drift;
 pub mod duplicate_detector;
 pub mod frontmatter;
 pub mod installer;
+pub mod mode;
 pub mod profile;
 pub mod repository;
 pub mod security_scan;
@@ -37,6 +38,8 @@ pub use duplicate_detector::detect_duplicates;
 pub use frontmatter::{ParseError, SkillMetadata, extract_body, parse_frontmatter};
 /// Ports for installing, removing, and updating skills via external tooling.
 pub use installer::{SkillInstaller, SkillToggler};
+/// Skill operating mode.
+pub use mode::SkillMode;
 /// Profile model, diff algorithm, and persistence port.
 pub use profile::{Profile, ProfileOp, ProfileStore, diff_profile};
 /// Port for listing installed skills.
