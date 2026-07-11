@@ -8,7 +8,7 @@ pub struct AuditReport<'a> {
     pub broken: Vec<&'a Skill>,
     /// Skills whose name conflicts with another installed skill.
     pub duplicates: Vec<&'a Skill>,
-    /// Valid or disabled skills that have no agent assignments.
+    /// Valid skills that have no agent assignments.
     pub no_agents: Vec<&'a Skill>,
     /// Skills where an upstream update is available.
     pub update_available: Vec<&'a Skill>,
@@ -34,7 +34,7 @@ pub fn audit_skills(skills: &[Skill]) -> AuditReport<'_> {
             ValidationState::Duplicate { .. } => {
                 duplicates.push(skill);
             }
-            ValidationState::Valid | ValidationState::Disabled => {
+            ValidationState::Valid => {
                 if skill.agents.is_empty() {
                     no_agents.push(skill);
                 }
@@ -60,7 +60,7 @@ pub fn audit_skills(skills: &[Skill]) -> AuditReport<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DriftState, Scope, ValidationState};
+    use crate::{DriftState, Scope, SkillMode, ValidationState};
     use std::path::PathBuf;
 
     fn valid_skill(name: &str) -> Skill {
@@ -71,6 +71,7 @@ mod tests {
             agents: vec!["claude".to_string()],
             tags: vec![],
             managed: false,
+            mode: SkillMode::Active,
             validation: ValidationState::Valid,
             manifest_content: None,
             drift_state: DriftState::default(),
