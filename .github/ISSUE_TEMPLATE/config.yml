@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security report
+    url: https://github.com/alexmrtr/ai-skill/security/advisories/new
+    about: Use advisories privados para vulnerabilidades quando disponíveis.
