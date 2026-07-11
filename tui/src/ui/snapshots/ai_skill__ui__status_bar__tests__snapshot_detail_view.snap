@@ -1,0 +1,13 @@
+---
+source: tui/src/ui/status_bar.rs
+expression: terminal.backend().buffer().clone()
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 80, height: 1 },
+    content: [
+        "j/k scroll  Esc back  q quit                                                    ",
+    ],
+    styles: [
+        x: 0, y: 0, fg: Black, bg: DarkGray, underline: Reset, modifier: NONE,
+    ]
+}

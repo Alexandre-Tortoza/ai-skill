@@ -1,0 +1,33 @@
+---
+source: tui/src/ui/editor_panel.rs
+expression: terminal.backend().buffer().clone()
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 80, height: 15 },
+    content: [
+        "┌Editor────────────────────────┐┌Body Preview──────────────────────────────────┐",
+        "│Edit Frontmatter              ││# body text                                   │",
+        "│                              ││                                              │",
+        "│Name: alpha ◀                 ││                                              │",
+        "│Agents: claude                ││                                              │",
+        "│Tags:                         ││                                              │",
+        "│                              ││                                              │",
+        "│Tab: next field  Enter: save  ││                                              │",
+        "│                              ││                                              │",
+        "│                              ││                                              │",
+        "│                              ││                                              │",
+        "│                              ││                                              │",
+        "│                              ││                                              │",
+        "│                              ││                                              │",
+        "└──────────────────────────────┘└──────────────────────────────────────────────┘",
+    ],
+    styles: [
+        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 1, y: 1, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 17, y: 1, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 1, y: 3, fg: Yellow, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 7, y: 3, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 12, y: 3, fg: Yellow, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 14, y: 3, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+    ]
+}

@@ -1,0 +1,38 @@
+---
+source: tui/src/ui/help_overlay.rs
+expression: terminal.backend().buffer().clone()
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 80, height: 24 },
+    content: [
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "          ┌Help — Key Bindings───────────────────────────────────────┐          ",
+        "          │j / ↓       move down                                     │          ",
+        "          │k / ↑       move up                                       │          ",
+        "          │Tab         cycle scope filter (all → global → project)   │          ",
+        "          │Enter       open skill detail                             │          ",
+        "          │s           open catalog search                           │          ",
+        "          │?           show this help                                │          ",
+        "          │Esc         go back / close                               │          ",
+        "          │q           quit                                          │          ",
+        "          │Ctrl-C      quit                                          │          ",
+        "          │                                                          │          ",
+        "          │                                                          │          ",
+        "          │                                                          │          ",
+        "          │                                                          │          ",
+        "          │                                                          │          ",
+        "          └──────────────────────────────────────────────────────────┘          ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+    ],
+    styles: [
+        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 11, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 30, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+    ]
+}

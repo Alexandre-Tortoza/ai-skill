@@ -1,0 +1,37 @@
+---
+source: tui/src/ui/audit_panel.rs
+expression: terminal.backend().buffer().clone()
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 80, height: 20 },
+    content: [
+        "┌Audit Report──────────────────────────────────────────────────────────────────┐",
+        "│broken: 1  duplicates: 0  no-agents: 0  updates: 1                            │",
+        "└──────────────────────────────────────────────────────────────────────────────┘",
+        "┌Broken (1)────────┐┌Duplicates (0)────┐┌No Agents (0)─────┐┌Updates (1)───────┐",
+        "│broken            ││                  ││                  ││drifted           │",
+        "│                  ││                  ││                  ││                  │",
+        "│                  ││                  ││                  ││                  │",
+        "│                  ││                  ││                  ││                  │",
+        "│                  ││                  ││                  ││                  │",
+        "│                  ││                  ││                  ││                  │",
+        "│                  ││                  ││                  ││                  │",
+        "│                  ││                  ││                  ││                  │",
+        "│                  ││                  ││                  ││                  │",
+        "│                  ││                  ││                  ││                  │",
+        "│                  ││                  ││                  ││                  │",
+        "│                  ││                  ││                  ││                  │",
+        "│                  ││                  ││                  ││                  │",
+        "│                  ││                  ││                  ││                  │",
+        "│                  ││                  ││                  ││                  │",
+        "└──────────────────┘└──────────────────┘└──────────────────┘└──────────────────┘",
+    ],
+    styles: [
+        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 0, y: 3, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 1, y: 4, fg: Red, bg: Reset, underline: Reset, modifier: NONE,
+        x: 7, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 61, y: 4, fg: Green, bg: Reset, underline: Reset, modifier: NONE,
+        x: 68, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+    ]
+}

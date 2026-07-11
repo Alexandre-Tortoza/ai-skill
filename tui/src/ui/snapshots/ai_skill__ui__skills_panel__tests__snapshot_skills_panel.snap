@@ -1,0 +1,24 @@
+---
+source: tui/src/ui/skills_panel.rs
+expression: buffer
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 40, height: 10 },
+    content: [
+        "┌Installed Skills──────────────────────┐",
+        "│omarchy [global]                      │",
+        "│my-skill [project]                    │",
+        "│                                      │",
+        "│                                      │",
+        "│                                      │",
+        "│                                      │",
+        "│                                      │",
+        "│                                      │",
+        "└──────────────────────────────────────┘",
+    ],
+    styles: [
+        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 1, y: 1, fg: Reset, bg: Reset, underline: Reset, modifier: REVERSED,
+        x: 39, y: 1, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+    ]
+}

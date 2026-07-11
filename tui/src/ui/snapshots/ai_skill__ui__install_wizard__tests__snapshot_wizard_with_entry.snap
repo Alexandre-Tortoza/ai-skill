@@ -1,0 +1,36 @@
+---
+source: tui/src/ui/install_wizard.rs
+expression: terminal.backend().buffer().clone()
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 80, height: 20 },
+    content: [
+        "┌Install Skill─────────────────────────────────────────────────────────────────┐",
+        "│Skill: omarchy                                                                │",
+        "│                                                                              │",
+        "│Scope: [●] global  [ ] project  (Tab to switch)                               │",
+        "│                                                                              │",
+        "│┌Agents (Space to toggle)────────────────────────────────────────────────────┐│",
+        "││[●] claude                                                                  ││",
+        "││                                                                            ││",
+        "││                                                                            ││",
+        "││                                                                            ││",
+        "││                                                                            ││",
+        "││                                                                            ││",
+        "││                                                                            ││",
+        "││                                                                            ││",
+        "││                                                                            ││",
+        "││                                                                            ││",
+        "│└────────────────────────────────────────────────────────────────────────────┘│",
+        "│Enter: confirm install  |  Esc: back to search                                │",
+        "│                                                                              │",
+        "└──────────────────────────────────────────────────────────────────────────────┘",
+    ],
+    styles: [
+        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 1, y: 1, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 8, y: 1, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 1, y: 3, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 8, y: 3, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+    ]
+}

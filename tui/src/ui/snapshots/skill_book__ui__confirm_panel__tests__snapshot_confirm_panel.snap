@@ -1,0 +1,51 @@
+---
+source: tui/src/ui/confirm_panel.rs
+assertion_line: 74
+expression: terminal.backend().buffer().clone()
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 80, height: 20 },
+    content: [
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "            ┌Confirm───────────────────────────────────────────────┐            ",
+        "            │                                                      │            ",
+        "            │npx skills disable /tmp/my-skill                      │            ",
+        "            │                                                      │            ",
+        "            │  Press y to confirm, n / Esc to cancel               │            ",
+        "            │                                                      │            ",
+        "            └──────────────────────────────────────────────────────┘            ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+    ],
+    styles: [
+        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 12, y: 6, fg: Reset, bg: DarkGray, underline: Reset, modifier: NONE,
+        x: 68, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 12, y: 7, fg: Reset, bg: DarkGray, underline: Reset, modifier: NONE,
+        x: 68, y: 7, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 12, y: 8, fg: Reset, bg: DarkGray, underline: Reset, modifier: NONE,
+        x: 68, y: 8, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 12, y: 9, fg: Reset, bg: DarkGray, underline: Reset, modifier: NONE,
+        x: 68, y: 9, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 12, y: 10, fg: Reset, bg: DarkGray, underline: Reset, modifier: NONE,
+        x: 21, y: 10, fg: Green, bg: DarkGray, underline: Reset, modifier: NONE,
+        x: 22, y: 10, fg: Reset, bg: DarkGray, underline: Reset, modifier: NONE,
+        x: 35, y: 10, fg: Red, bg: DarkGray, underline: Reset, modifier: NONE,
+        x: 36, y: 10, fg: Reset, bg: DarkGray, underline: Reset, modifier: NONE,
+        x: 68, y: 10, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 12, y: 11, fg: Reset, bg: DarkGray, underline: Reset, modifier: NONE,
+        x: 68, y: 11, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 12, y: 12, fg: Reset, bg: DarkGray, underline: Reset, modifier: NONE,
+        x: 68, y: 12, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+    ]
+}
