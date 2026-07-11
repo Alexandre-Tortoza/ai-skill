@@ -1,0 +1,15 @@
+name: ai-skill
+arch: amd64
+platform: linux
+version: ${VERSION}
+section: utils
+priority: optional
+maintainer: Alexandre Tortoza <alexandre.tortoza@proton.me>
+description: Terminal UI for managing, auditing and installing AI agent skills.
+homepage: https://github.com/alexmrtr/ai-skill
+license: AGPL-3.0-only
+contents:
+  - src: ./dist/linux/ai-skill
+    dst: /usr/bin/ai-skill
+  - src: ./LICENSE
+    dst: /usr/share/licenses/ai-skill/LICENSE

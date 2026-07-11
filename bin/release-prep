@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: bin/release-prep vX.Y.Z" >&2
+  exit 2
+fi
+
+version="$1"
+if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "version must match vX.Y.Z, got: $version" >&2
+  exit 2
+fi
+
+number="${version#v}"
+pkgid="$(cargo pkgid -p ai-skill)"
+manifest_version="${pkgid##*@}"
+
+if [[ "$manifest_version" != "$number" ]]; then
+  cat >&2 <<EOF
+manifest version is $manifest_version, expected $number
+
+Update all workspace crate versions first, for example:
+  cargo set-version --workspace $number
+EOF
+  exit 1
+fi
+
+if ! grep -q "^## \[$number\]" CHANGELOG.md; then
+  echo "CHANGELOG.md is missing a ## [$number] section" >&2
+  exit 1
+fi
+
+bin/check
+
+cat <<EOF
+Release prep checks passed for $version.
+
+Next manual steps:
+  git add .
+  git commit -m "release: $version"
+  git tag $version
+  git push origin main $version
+
+The release workflow will build archives, publish crates.io packages and create the GitHub Release.
+EOF
