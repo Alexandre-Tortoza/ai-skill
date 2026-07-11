@@ -1,0 +1,567 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, for example v0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+            binary: ai-skill
+          - os: macos-13
+            target: x86_64-apple-darwin
+            archive: tar.gz
+            binary: ai-skill
+          - os: macos-14
+            target: aarch64-apple-darwin
+            archive: tar.gz
+            binary: ai-skill
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+            binary: ai-skill.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Build binary
+        run: cargo build --release -p ai-skill --target ${{ matrix.target }}
+
+      - name: Package Unix artifact
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging="ai-skill-${{ matrix.target }}"
+          mkdir "$staging"
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" "$staging/"
+          cp README.md LICENSE CHANGELOG.md "$staging/"
+          tar -czf "$staging.tar.gz" "$staging"
+
+      - name: Package Windows artifact
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $staging = "ai-skill-${{ matrix.target }}"
+          New-Item -ItemType Directory -Path $staging | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary }}" $staging
+          Copy-Item README.md, LICENSE, CHANGELOG.md $staging
+          Compress-Archive -Path $staging -DestinationPath "$staging.zip"
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-skill-${{ matrix.target }}
+          path: ai-skill-${{ matrix.target }}.${{ matrix.archive }}
+          if-no-files-found: error
+
+  publish-crates:
+    name: Publish crates.io packages
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME}"
+          fi
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must match v*.*.*: $version" >&2
+            exit 1
+          fi
+          echo "number=${version#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish crates idempotently
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${CARGO_REGISTRY_TOKEN:-}" ]]; then
+            echo "CARGO_REGISTRY_TOKEN secret is required to publish crates.io packages" >&2
+            exit 1
+          fi
+
+          pkgid="$(cargo pkgid -p ai-skill)"
+          manifest_version="${pkgid##*@}"
+          release_version="${{ steps.version.outputs.number }}"
+          if [[ "$manifest_version" != "$release_version" ]]; then
+            echo "Manifest version $manifest_version does not match release $release_version" >&2
+            exit 1
+          fi
+
+          publish_crate() {
+            crate="$1"
+            echo "Publishing $crate"
+            set +e
+            output="$(cargo publish -p "$crate" --token "$CARGO_REGISTRY_TOKEN" 2>&1)"
+            status=$?
+            set -e
+            printf '%s\n' "$output"
+            if [[ $status -eq 0 ]]; then
+              return 0
+            fi
+            if printf '%s\n' "$output" | grep -Eiq 'already (exists|uploaded)|is already uploaded'; then
+              echo "$crate $release_version already exists on crates.io; continuing"
+              return 0
+            fi
+            return "$status"
+          }
+
+          publish_crate ai-skill-core
+          sleep 30
+          publish_crate ai-skill-adapters
+          sleep 30
+          publish_crate ai-skill
+
+  package-linux:
+    name: Package DEB/RPM
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME}"
+          fi
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must match v*.*.*: $version" >&2
+            exit 1
+          fi
+          echo "number=${version#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download Linux tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-skill-x86_64-unknown-linux-gnu
+          path: dist/input
+
+      - name: Prepare package input
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/linux dist/packages
+          tar -xzf dist/input/ai-skill-x86_64-unknown-linux-gnu.tar.gz -C dist/linux --strip-components=1
+
+      - name: Build DEB package
+        uses: goreleaser/nfpm-action@v2
+        env:
+          VERSION: ${{ steps.version.outputs.number }}
+        with:
+          version: latest
+          args: pkg --packager deb --target dist/packages/
+
+      - name: Build RPM package
+        uses: goreleaser/nfpm-action@v2
+        env:
+          VERSION: ${{ steps.version.outputs.number }}
+        with:
+          version: latest
+          args: pkg --packager rpm --target dist/packages/
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-skill-linux-packages
+          path: dist/packages/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs:
+      - build
+      - package-linux
+      - publish-crates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME}"
+          fi
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must match v*.*.*: $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "number=${version#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum * > SHA256SUMS
+
+      - name: Extract changelog section
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.number }}"
+          awk \
+            -v header="## [${version}]" \
+            'BEGIN { found=0 } index($0, header) == 1 { found=1; next } found && /^## \[/ { exit } found && /^\[/ { exit } found { print }' \
+            CHANGELOG.md > release-notes.md
+          if [[ ! -s release-notes.md ]]; then
+            echo "No CHANGELOG.md section found for ${version}" >&2
+            exit 1
+          fi
+          {
+            cat release-notes.md
+            printf '\n## Installation\n\n'
+            printf 'Download the archive for your platform from the assets below, verify it with `SHA256SUMS`, extract it and move `ai-skill` into a directory on your `PATH`.\n'
+          } > release-body.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ai-skill ${{ steps.version.outputs.version }}
+          body_path: release-body.md
+          files: |
+            dist/*
+
+  update-homebrew-tap:
+    name: Update Homebrew tap
+    needs: publish
+    runs-on: ubuntu-latest
+    env:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+    steps:
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME}"
+          fi
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must match v*.*.*: $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "number=${version#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download release packages
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum * > SHA256SUMS
+
+      - name: Check Homebrew tap token
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${HOMEBREW_TAP_TOKEN:-}" ]]; then
+            echo "HOMEBREW_TAP_TOKEN secret is required to update alexmrtr/homebrew-tap" >&2
+            exit 1
+          fi
+
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: alexmrtr/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update formula
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="${{ steps.version.outputs.version }}"
+          number="${{ steps.version.outputs.number }}"
+          release_base="https://github.com/alexmrtr/ai-skill/releases/download/${version}"
+
+          sha_for() {
+            asset="$1"
+            awk -v asset="$asset" '$2 == asset { print $1 }' dist/SHA256SUMS
+          }
+
+          linux_asset="ai-skill-x86_64-unknown-linux-gnu.tar.gz"
+          mac_intel_asset="ai-skill-x86_64-apple-darwin.tar.gz"
+          mac_arm_asset="ai-skill-aarch64-apple-darwin.tar.gz"
+
+          linux_sha="$(sha_for "$linux_asset")"
+          mac_intel_sha="$(sha_for "$mac_intel_asset")"
+          mac_arm_sha="$(sha_for "$mac_arm_asset")"
+
+          if [[ -z "$linux_sha" || -z "$mac_intel_sha" || -z "$mac_arm_sha" ]]; then
+            echo "Missing checksum for one or more Homebrew assets" >&2
+            exit 1
+          fi
+
+          mkdir -p homebrew-tap/Formula
+          cat > homebrew-tap/Formula/ai-skill.rb <<EOF
+          class AiSkill < Formula
+            desc "Terminal UI for managing, auditing and installing AI agent skills"
+            homepage "https://github.com/alexmrtr/ai-skill"
+            license "AGPL-3.0-only"
+            version "${number}"
+
+            on_macos do
+              on_arm do
+                url "${release_base}/${mac_arm_asset}"
+                sha256 "${mac_arm_sha}"
+              end
+
+              on_intel do
+                url "${release_base}/${mac_intel_asset}"
+                sha256 "${mac_intel_sha}"
+              end
+            end
+
+            on_linux do
+              on_intel do
+                url "${release_base}/${linux_asset}"
+                sha256 "${linux_sha}"
+              end
+            end
+
+            def install
+              bin.install "ai-skill"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/ai-skill --version")
+            end
+          end
+          EOF
+
+      - name: Commit tap update
+        working-directory: homebrew-tap
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/ai-skill.rb
+          if git diff --cached --quiet; then
+            echo "Homebrew formula already up to date"
+            exit 0
+          fi
+          git commit -m "Update ai-skill to ${{ steps.version.outputs.version }}"
+          git push
+
+  update-aur:
+    name: Update AUR packages
+    needs: publish
+    runs-on: ubuntu-latest
+    env:
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+
+    steps:
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME}"
+          fi
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must match v*.*.*: $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "number=${version#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check AUR token
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${AUR_SSH_PRIVATE_KEY:-}" ]]; then
+            echo "AUR_SSH_PRIVATE_KEY secret is required to update AUR packages" >&2
+            exit 1
+          fi
+
+      - name: Download release packages
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum * > SHA256SUMS
+
+      - name: Generate PKGBUILDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p aur/ai-skill-bin aur/ai-skill
+          version="${{ steps.version.outputs.version }}"
+          number="${{ steps.version.outputs.number }}"
+          release_base="https://github.com/alexmrtr/ai-skill/releases/download/${version}"
+          linux_asset="ai-skill-x86_64-unknown-linux-gnu.tar.gz"
+          linux_sha="$(awk -v asset="$linux_asset" '$2 == asset { print $1 }' dist/SHA256SUMS)"
+          source_url="https://github.com/alexmrtr/ai-skill/archive/refs/tags/${version}.tar.gz"
+          curl -fsSL "$source_url" -o source.tar.gz
+          source_sha="$(sha256sum source.tar.gz | cut -d ' ' -f 1)"
+
+          if [[ -z "$linux_sha" || -z "$source_sha" ]]; then
+            echo "Missing checksum for AUR package generation" >&2
+            exit 1
+          fi
+
+          cat > aur/ai-skill-bin/PKGBUILD <<'EOF'
+          # Maintainer: Alexandre Tortoza <alexandre.tortoza@proton.me>
+          pkgname=ai-skill-bin
+          pkgver=@VERSION@
+          pkgrel=1
+          pkgdesc='Terminal UI for managing, auditing and installing AI agent skills'
+          arch=('x86_64')
+          url='https://github.com/alexmrtr/ai-skill'
+          license=('AGPL-3.0-only')
+          depends=('gcc-libs')
+          provides=('ai-skill')
+          conflicts=('ai-skill')
+          source=("ai-skill-${pkgver}-x86_64.tar.gz::@RELEASE_BASE@/@LINUX_ASSET@")
+          sha256sums=('@LINUX_SHA@')
+
+          package() {
+            install -Dm755 "$srcdir/ai-skill-x86_64-unknown-linux-gnu/ai-skill" "$pkgdir/usr/bin/ai-skill"
+            install -Dm644 "$srcdir/ai-skill-x86_64-unknown-linux-gnu/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+          }
+          EOF
+          perl -pi -e "s|@VERSION@|$number|g; s|@RELEASE_BASE@|$release_base|g; s|@LINUX_ASSET@|$linux_asset|g; s|@LINUX_SHA@|$linux_sha|g" aur/ai-skill-bin/PKGBUILD
+
+          cat > aur/ai-skill/PKGBUILD <<'EOF'
+          # Maintainer: Alexandre Tortoza <alexandre.tortoza@proton.me>
+          pkgname=ai-skill
+          pkgver=@VERSION@
+          pkgrel=1
+          pkgdesc='Terminal UI for managing, auditing and installing AI agent skills'
+          arch=('x86_64')
+          url='https://github.com/alexmrtr/ai-skill'
+          license=('AGPL-3.0-only')
+          depends=('gcc-libs')
+          makedepends=('cargo')
+          source=("$pkgname-$pkgver.tar.gz::@SOURCE_URL@")
+          sha256sums=('@SOURCE_SHA@')
+
+          prepare() {
+            cd "$srcdir/ai-skill-$pkgver"
+            cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
+          }
+
+          build() {
+            cd "$srcdir/ai-skill-$pkgver"
+            cargo build --release --locked -p ai-skill
+          }
+
+          package() {
+            cd "$srcdir/ai-skill-$pkgver"
+            install -Dm755 target/release/ai-skill "$pkgdir/usr/bin/ai-skill"
+            install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+          }
+          EOF
+          perl -pi -e "s|@VERSION@|$number|g; s|@SOURCE_URL@|$source_url|g; s|@SOURCE_SHA@|$source_sha|g" aur/ai-skill/PKGBUILD
+
+      - name: Publish ai-skill-bin to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: ai-skill-bin
+          pkgbuild: aur/ai-skill-bin/PKGBUILD
+          commit_username: github-actions[bot]
+          commit_email: 41898282+github-actions[bot]@users.noreply.github.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update ai-skill-bin to ${{ steps.version.outputs.version }}
+
+      - name: Publish ai-skill to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: ai-skill
+          pkgbuild: aur/ai-skill/PKGBUILD
+          commit_username: github-actions[bot]
+          commit_email: 41898282+github-actions[bot]@users.noreply.github.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update ai-skill to ${{ steps.version.outputs.version }}
