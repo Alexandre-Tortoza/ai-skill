@@ -6,10 +6,12 @@
 
 pub mod audit;
 pub mod budget;
+pub mod bundle;
 pub mod catalog;
 pub mod creator;
 pub mod drift;
 pub mod duplicate_detector;
+pub mod external_scanner;
 pub mod frontmatter;
 pub mod installer;
 pub mod linter;
@@ -18,7 +20,9 @@ pub mod profile;
 pub mod repository;
 pub mod security_scan;
 pub mod settings;
+pub mod signature;
 pub mod skill;
+pub mod ssh;
 pub mod validation;
 
 /// Report grouping skills by their health category.
@@ -27,6 +31,8 @@ pub use audit::{AuditReport, audit_skills};
 pub use budget::{
     BudgetWarning, ContextBudget, SkillCost, calculate_budget, classify_budget, estimate_skill_cost,
 };
+/// Bundle model and persistence port for predefined skill collections.
+pub use bundle::{Bundle, BundleStore};
 /// Port for querying a remote skill catalog.
 pub use catalog::{AnyCatalogGateway, CatalogEntry};
 /// Ports and helpers for creating and editing skill manifests.
@@ -35,6 +41,8 @@ pub use creator::{SkillCreator, SkillWriter, apply_edit, scaffold_skill};
 pub use drift::{DriftChecker, DriftState};
 /// Case-insensitive duplicate name detection across a skill slice.
 pub use duplicate_detector::detect_duplicates;
+/// Port for integrating with external security scanners.
+pub use external_scanner::{ExternalFinding, ExternalScanner, NoopExternalScanner};
 /// Frontmatter (`---` delimited YAML) parsing and body extraction.
 pub use frontmatter::{ParseError, SkillMetadata, extract_body, parse_frontmatter};
 /// Ports for installing, removing, and updating skills via external tooling.
@@ -49,11 +57,18 @@ pub use mode::SkillMode;
 pub use profile::{Phase, Profile, ProfileOp, ProfileStore, diff_profile};
 /// Port for listing installed skills.
 pub use repository::SkillRepository;
-/// Heuristic content scanner for dangerous patterns.
-pub use security_scan::{ScanCategory, ScanFinding, Severity, cross_reference, scan_skill};
+pub use security_scan::{
+    DepEdge, DepGraph, DepNode, ImportChainFinding, ImportRef, ReferenceType, ScanCategory,
+    ScanFinding, Severity, cross_reference, parse_import_refs, scan_skill,
+};
 /// Settings model and persistence port for `.claude/settings.json`.
 pub use settings::{ProjectSettings, SettingsStore, SkillOverride};
-/// Core skill model and scope enum.
-pub use skill::{Scope, Skill};
+/// Heuristic content scanner for dangerous patterns.
+/// Port for ed25519 signature verification.
+pub use signature::{NoopSignatureVerifier, SignatureVerifier, VerificationStatus};
+/// Core skill model, agent enum, and scope.
+pub use skill::{Agent, Scope, Skill};
+/// Port for SSH-based remote machine management.
+pub use ssh::{ConnectionStatus, NoopSshConnector, RemoteHost, RemoteSkill, SshConnector};
 /// Validation state enum describing a skill's health.
 pub use validation::ValidationState;

@@ -15,12 +15,33 @@ use crate::{
 };
 
 /// Renders the profiles panel with list, activate, and create controls.
-pub fn render_profiles_panel(state: &ProfileState, area: Rect, frame: &mut Frame) {
-    let chunks =
-        Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)]).split(area);
+pub fn render_profiles_panel(
+    state: &ProfileState,
+    area: Rect,
+    frame: &mut Frame,
+    export_message: Option<&str>,
+) {
+    let chunks = Layout::vertical([
+        Constraint::Min(0),
+        Constraint::Length(if export_message.is_some() { 1 } else { 0 }),
+    ])
+    .split(area);
 
-    render_profile_list(state, chunks[0], frame);
-    render_profile_detail(state, chunks[1], frame);
+    let main = chunks[0];
+    let msg_area = chunks[1];
+
+    let inner =
+        Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)]).split(main);
+
+    render_profile_list(state, inner[0], frame);
+    render_profile_detail(state, inner[1], frame);
+
+    if let Some(msg) = export_message {
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(msg, fg(Color::Green)))),
+            msg_area,
+        );
+    }
 }
 
 fn render_profile_list(state: &ProfileState, area: Rect, frame: &mut Frame) {
@@ -116,7 +137,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         let state = make_state(vec![]);
         terminal
-            .draw(|f| render_profiles_panel(&state, f.area(), f))
+            .draw(|f| render_profiles_panel(&state, f.area(), f, None))
             .unwrap();
     }
 
@@ -137,7 +158,7 @@ mod tests {
             },
         ]);
         terminal
-            .draw(|f| render_profiles_panel(&state, f.area(), f))
+            .draw(|f| render_profiles_panel(&state, f.area(), f, None))
             .unwrap();
     }
 
@@ -158,7 +179,7 @@ mod tests {
             },
         ]);
         terminal
-            .draw(|f| render_profiles_panel(&state, f.area(), f))
+            .draw(|f| render_profiles_panel(&state, f.area(), f, None))
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
     }
@@ -171,7 +192,7 @@ mod tests {
         state.creating = true;
         state.new_name_input = "my-prf".into();
         terminal
-            .draw(|f| render_profiles_panel(&state, f.area(), f))
+            .draw(|f| render_profiles_panel(&state, f.area(), f, None))
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
     }

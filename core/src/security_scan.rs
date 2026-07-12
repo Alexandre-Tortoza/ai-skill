@@ -21,6 +21,8 @@ pub enum ScanCategory {
     PromptInjection,
     /// Name is very similar to a known skill in the registry (typosquat/impersonation).
     Impersonation,
+    /// Finding reported by an external scanner integration (Socket, Snyk, Semgrep).
+    ExternalScanner,
 }
 
 /// A single finding produced by scanning skill content.
@@ -135,6 +137,228 @@ pub fn scan_skill(content: &str) -> Vec<ScanFinding> {
     }
 
     findings
+}
+
+/// How a file was referenced from another file.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportRef {
+    /// 1-based line number where the reference appears.
+    pub source_line: usize,
+    /// How the reference was made.
+    pub reference_type: ReferenceType,
+    /// The referenced path as written (e.g., `"./utils.sh"`).
+    pub referenced_path: String,
+}
+
+/// How a file reference was expressed in source.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ReferenceType {
+    /// `source <path>` or `. <path>` (bash)
+    Source,
+    /// `import <module>` (python)
+    Import,
+    /// `require(...)` (node)
+    Require,
+    /// Running a script directly (`bash`, `python3`, `./script`, etc.)
+    Exec,
+    /// `npx <package>`
+    Npx,
+    /// Other reference
+    Unknown,
+}
+
+/// A security finding with its origin file and import chain trace.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportChainFinding {
+    /// The original scan finding.
+    pub finding: ScanFinding,
+    /// The file where this finding was found (relative to skill dir or "SKILL.md").
+    pub origin_file: String,
+    /// The chain of imports from SKILL.md to this file (empty if finding is in SKILL.md itself).
+    pub import_chain: Vec<ImportRef>,
+}
+
+/// A node in the import dependency graph.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DepNode {
+    pub id: usize,
+    /// File path relative to the skill directory.
+    pub path: String,
+    pub has_findings: bool,
+    pub finding_count: usize,
+}
+
+/// An edge between two dependency nodes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DepEdge {
+    pub from: usize,
+    pub to: usize,
+    pub reference: ImportRef,
+}
+
+/// Full import dependency graph for a skill.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DepGraph {
+    pub nodes: Vec<DepNode>,
+    pub edges: Vec<DepEdge>,
+}
+
+/// Parses a content string for local file references (imports, sources, requires, execs).
+///
+/// Returns a list of [`ImportRef`]s found in the content. Only references that look
+/// like local file paths (contain `/`, start with `./`, `../`, or are bare names)
+/// are returned. External module references (e.g. `import os`) are excluded.
+pub fn parse_import_refs(content: &str) -> Vec<ImportRef> {
+    let mut refs = Vec::new();
+
+    for (i, raw_line) in content.lines().enumerate() {
+        let line_no = i + 1;
+        let line = raw_line.trim();
+
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        // source <path> or . <path>
+        if let Some(rest) = line
+            .strip_prefix("source ")
+            .or_else(|| line.strip_prefix(". "))
+        {
+            let path = rest.split_whitespace().next().unwrap_or("").to_string();
+            if is_local_path(&path) {
+                refs.push(ImportRef {
+                    source_line: line_no,
+                    reference_type: ReferenceType::Source,
+                    referenced_path: path,
+                });
+            }
+            continue;
+        }
+
+        // require('./path') or require("./path")
+        if let Some(rest) = line.find("require(") {
+            let after = &line[rest + 8..];
+            let path = extract_string_literal(after);
+            if let Some(p) = path
+                && is_local_path(&p)
+            {
+                refs.push(ImportRef {
+                    source_line: line_no,
+                    reference_type: ReferenceType::Require,
+                    referenced_path: p,
+                });
+            }
+            continue;
+        }
+
+        // import <module>
+        if let Some(rest) = line.strip_prefix("import ") {
+            let parts: Vec<&str> = rest.split_whitespace().collect();
+            if let Some(path) = parts.first() {
+                let mut p = path.to_string();
+                // remove quotes
+                if (p.starts_with('\'') && p.ends_with('\''))
+                    || (p.starts_with('"') && p.ends_with('"'))
+                {
+                    let len = p.len();
+                    p = p[1..len - 1].to_string();
+                }
+                if (p.starts_with('.') && p.contains('/')) || p.contains('/') {
+                    refs.push(ImportRef {
+                        source_line: line_no,
+                        reference_type: ReferenceType::Import,
+                        referenced_path: p,
+                    });
+                }
+            }
+            continue;
+        }
+
+        // bash|sh|python3|python|node|deno <script>
+        for runner in &["bash ", "sh ", "python3 ", "python ", "node ", "deno "] {
+            if let Some(rest) = line.strip_prefix(runner) {
+                let candidate = rest.split_whitespace().next().unwrap_or("");
+                let p = if candidate.contains('/') || candidate.contains('.') {
+                    candidate.to_string()
+                } else {
+                    continue;
+                };
+                if is_local_path(&p) {
+                    refs.push(ImportRef {
+                        source_line: line_no,
+                        reference_type: ReferenceType::Exec,
+                        referenced_path: p,
+                    });
+                }
+                break;
+            }
+        }
+
+        // npx <package>
+        if let Some(rest) = line.strip_prefix("npx ") {
+            let pkg = rest.split_whitespace().next().unwrap_or("").to_string();
+            if !pkg.is_empty() {
+                refs.push(ImportRef {
+                    source_line: line_no,
+                    reference_type: ReferenceType::Npx,
+                    referenced_path: pkg,
+                });
+            }
+            continue;
+        }
+
+        // Direct execution: ./path or ../path or path/name (starts with ./ or ../)
+        if line.starts_with("./") || line.starts_with("../") {
+            let path = line.split_whitespace().next().unwrap_or("").to_string();
+            if is_local_path(&path) {
+                refs.push(ImportRef {
+                    source_line: line_no,
+                    reference_type: ReferenceType::Exec,
+                    referenced_path: path,
+                });
+            }
+        }
+    }
+
+    refs
+}
+
+/// Extracts a string literal from the start of a string (after `require(`).
+fn extract_string_literal(s: &str) -> Option<String> {
+    let trimmed = s.trim();
+    let quote = trimmed.chars().next()?;
+    if quote != '\'' && quote != '"' {
+        return None;
+    }
+    let mut result = String::new();
+    let mut chars = trimmed[1..].chars();
+    loop {
+        match chars.next() {
+            None => return None,
+            Some(c) if c == quote => return Some(result),
+            Some(c) => result.push(c),
+        }
+    }
+}
+
+/// Returns true if the path looks like a local file reference (not a system binary or module).
+fn is_local_path(path: &str) -> bool {
+    if path.is_empty() {
+        return false;
+    }
+    // Relative paths
+    if path.starts_with("./") || path.starts_with("../") {
+        return true;
+    }
+    // Has a slash but doesn't look like a system path
+    if path.contains('/') && !path.starts_with('/') && !path.starts_with("~/") {
+        return true;
+    }
+    // Bare filename with an extension
+    if !path.contains('/') && path.contains('.') && !path.contains('$') {
+        return true;
+    }
+    false
 }
 
 use crate::{AnyCatalogGateway, CatalogEntry};

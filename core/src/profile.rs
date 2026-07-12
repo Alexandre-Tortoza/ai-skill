@@ -1,6 +1,7 @@
 //! Profile model, diff algorithm, and persistence port.
 
 use std::collections::HashSet;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -76,6 +77,8 @@ pub trait ProfileStore {
     fn save(&self, profile: &Profile) -> Result<(), Box<dyn std::error::Error>>;
     /// Deletes a profile by name.
     fn delete(&self, name: &str) -> Result<(), Box<dyn std::error::Error>>;
+    /// Exports a profile as YAML to the given destination path.
+    fn export(&self, name: &str, dest: &Path) -> Result<(), Box<dyn std::error::Error>>;
 }
 
 #[cfg(test)]
@@ -187,6 +190,9 @@ mod tests {
                 Ok(())
             }
             fn delete(&self, _n: &str) -> Result<(), Box<dyn std::error::Error>> {
+                Ok(())
+            }
+            fn export(&self, _name: &str, _dest: &Path) -> Result<(), Box<dyn std::error::Error>> {
                 Ok(())
             }
         }

@@ -1,6 +1,6 @@
 //! Filesystem-based [`ProfileStore`] that reads/writes YAML files.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use ai_skill_core::{Phase, Profile, ProfileStore};
 
@@ -73,6 +73,20 @@ impl ProfileStore for FsProfileStore {
         if path.exists() {
             std::fs::remove_file(path)?;
         }
+        Ok(())
+    }
+
+    fn export(&self, name: &str, dest: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        let profiles = self.list()?;
+        let profile = profiles
+            .into_iter()
+            .find(|p| p.name == name)
+            .ok_or_else(|| format!("profile '{name}' not found"))?;
+        let yaml = serde_norway::to_string(&profile)?;
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(dest, yaml)?;
         Ok(())
     }
 }

@@ -1,10 +1,12 @@
 //! Application state, view transitions, and event handling.
 
+use ai_skill_adapters::ImportChainResult;
 use ai_skill_core::{
-    AnyCatalogGateway, CatalogEntry, ContextBudget, LintWarning, Phase, Profile, ProfileOp,
-    ProfileStore, ProjectSettings, ScanFinding, Scope, SettingsStore, Skill, SkillCreator,
-    SkillInstaller, SkillMode, SkillToggler, SkillWriter, calculate_budget, cross_reference,
-    scan_skill,
+    AnyCatalogGateway, Bundle, BundleStore, CatalogEntry, ConnectionStatus, ContextBudget,
+    ExternalScanner, LintWarning, Phase, Profile, ProfileOp, ProfileStore, ProjectSettings,
+    RemoteHost, RemoteSkill, ScanFinding, Scope, SettingsStore, SignatureVerifier, Skill,
+    SkillCreator, SkillInstaller, SkillMode, SkillToggler, SkillWriter, SshConnector,
+    calculate_budget, cross_reference, scan_skill,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::path::PathBuf;
@@ -28,6 +30,9 @@ pub enum View {
     Audit,
     Budget,
     Settings,
+    ImportChain,
+    SshRemote,
+    Bundles,
 }
 
 /// Steps in the create-skill wizard.
@@ -196,6 +201,32 @@ pub struct SearchState {
     pub error: Option<String>,
 }
 
+/// State for the SSH remote management panel.
+#[derive(Debug, Default)]
+pub struct SshState {
+    /// Configured remote hosts the user can connect to.
+    pub hosts: Vec<RemoteHost>,
+    /// Index of the selected host.
+    pub selected_index: usize,
+    /// Skills listed from the selected host.
+    pub skills: Vec<RemoteSkill>,
+    /// Result of the last connection check.
+    pub connection_status: Option<ConnectionStatus>,
+    /// Error message from the last operation.
+    pub error: Option<String>,
+}
+
+/// State for the bundles panel.
+#[derive(Debug, Default)]
+pub struct BundleState {
+    /// Available bundles from the store.
+    pub bundles: Vec<Bundle>,
+    /// Index of the selected bundle.
+    pub selected_index: usize,
+    /// Result message after attempting installation.
+    pub result_message: Option<String>,
+}
+
 /// Top-level application state, generic over adapters.
 pub struct App<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> {
     pub all_skills: Vec<Skill>,
@@ -222,11 +253,21 @@ pub struct App<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> {
     pub settings_store: Box<dyn SettingsStore>,
     pub settings: Option<ProjectSettings>,
     pub settings_state: SettingsState,
+    pub external_scanner: Box<dyn ExternalScanner>,
+    #[allow(dead_code)]
+    pub signature_verifier: Box<dyn SignatureVerifier>,
+    pub ssh_connector: Box<dyn SshConnector>,
+    pub ssh_state: SshState,
+    pub bundle_store: Box<dyn BundleStore>,
+    pub bundle_state: BundleState,
     pub should_quit: bool,
+    pub import_chain_result: Option<ImportChainResult>,
+    pub profile_export_message: Option<String>,
 }
 
 #[allow(clippy::too_many_arguments)]
 impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         all_skills: Vec<Skill>,
         catalog: G,
@@ -236,6 +277,10 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
         creator: Box<dyn SkillCreator>,
         writer: Box<dyn SkillWriter>,
         settings_store: Box<dyn SettingsStore>,
+        external_scanner: Box<dyn ExternalScanner>,
+        signature_verifier: Box<dyn SignatureVerifier>,
+        ssh_connector: Box<dyn SshConnector>,
+        bundle_store: Box<dyn BundleStore>,
     ) -> Self {
         let profiles = profile_store.list().unwrap_or_default();
         let budget = calculate_budget(&all_skills);
@@ -269,7 +314,15 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             settings_store,
             settings: None,
             settings_state: SettingsState::default(),
+            external_scanner,
+            signature_verifier,
+            ssh_connector,
+            ssh_state: SshState::default(),
+            bundle_store,
+            bundle_state: BundleState::default(),
             should_quit: false,
+            import_chain_result: None,
+            profile_export_message: None,
         }
     }
 
@@ -342,6 +395,9 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 View::Audit => self.handle_audit_key(key),
                 View::Budget => self.handle_audit_key(key),
                 View::Settings => self.handle_settings_key(key),
+                View::ImportChain => self.handle_import_chain_key(key),
+                View::SshRemote => self.handle_ssh_key(key),
+                View::Bundles => self.handle_bundles_key(key),
             },
             AppEvent::Resize => {}
         }
@@ -549,6 +605,14 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             KeyCode::Char('?') if key.modifiers == KeyModifiers::NONE => {
                 self.view = View::Help;
             }
+            KeyCode::Char('b') if key.modifiers == KeyModifiers::NONE => {
+                let bundles = self.bundle_store.list().unwrap_or_default();
+                self.bundle_state = BundleState {
+                    bundles,
+                    ..BundleState::default()
+                };
+                self.view = View::Bundles;
+            }
             KeyCode::Char('c') if key.modifiers == KeyModifiers::NONE => {
                 self.create_wizard_state = CreateWizardState::default();
                 self.view = View::CreateWizard;
@@ -593,6 +657,10 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 self.settings_state = SettingsState::default();
                 self.view = View::Settings;
             }
+            KeyCode::Char('R') => {
+                self.ssh_state = SshState::default();
+                self.view = View::SshRemote;
+            }
             KeyCode::F(1) => self.activate_phase_preset(Phase::Init),
             KeyCode::F(2) => self.activate_phase_preset(Phase::Dev),
             KeyCode::F(3) => self.activate_phase_preset(Phase::Test),
@@ -613,6 +681,13 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             KeyCode::Char('o') if key.modifiers == KeyModifiers::NONE => {
                 if let Some(skill) = self.selected_skill().cloned() {
                     self.toggle_skill_auto_trigger(&skill.name);
+                }
+            }
+            KeyCode::Char('i') if key.modifiers == KeyModifiers::NONE => {
+                if let Some(skill) = self.selected_skill() {
+                    use ai_skill_adapters::trace_import_chain;
+                    self.import_chain_result = trace_import_chain(&skill.path).ok();
+                    self.view = View::ImportChain;
                 }
             }
             _ => {}
@@ -731,6 +806,9 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     let agents = self.install_wizard_state.selected_agents.clone();
                     let mut findings = scan_skill(&entry.description);
                     findings.extend(cross_reference(&entry, &self.catalog));
+                    if let Ok(ext_findings) = self.external_scanner.scan(&entry.name) {
+                        findings.extend(ext_findings.into_iter().map(Into::into));
+                    }
                     let action = AppAction::Install {
                         name: entry.name,
                         agents,
@@ -771,6 +849,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
         match key.code {
             KeyCode::Esc => {
                 self.profile_state.creating = false;
+                self.profile_export_message = None;
                 self.view = View::List;
             }
             KeyCode::Down | KeyCode::Char('j')
@@ -835,6 +914,25 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 self.profile_state.profiles = profiles;
                 self.profile_state.selected_index =
                     self.profile_state.selected_index.saturating_sub(1);
+            }
+            KeyCode::Char('e') if key.modifiers == KeyModifiers::NONE && len > 0 => {
+                let name = self.profile_state.profiles[self.profile_state.selected_index]
+                    .name
+                    .clone();
+                if let Ok(cwd) = std::env::current_dir() {
+                    let dest = cwd.join(format!("{name}.skill-profile.yaml"));
+                    match self.profile_store.export(&name, &dest) {
+                        Ok(()) => {
+                            self.profile_export_message =
+                                Some(format!("Exported to {}", dest.display()));
+                        }
+                        Err(e) => {
+                            self.last_error = Some(e.to_string());
+                        }
+                    }
+                } else {
+                    self.last_error = Some("Cannot determine current directory".into());
+                }
             }
             _ => {}
         }
@@ -1002,6 +1100,96 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
         }
     }
 
+    fn handle_import_chain_key(&mut self, key: crossterm::event::KeyEvent) {
+        if key.code == KeyCode::Esc {
+            self.import_chain_result = None;
+            self.view = View::Detail;
+        }
+    }
+
+    fn handle_bundles_key(&mut self, key: crossterm::event::KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.bundle_state.result_message = None;
+                self.view = View::List;
+            }
+            KeyCode::Down | KeyCode::Char('j') if key.modifiers == KeyModifiers::NONE => {
+                let len = self.bundle_state.bundles.len();
+                if len > 0 && self.bundle_state.selected_index + 1 < len {
+                    self.bundle_state.selected_index += 1;
+                }
+            }
+            KeyCode::Up | KeyCode::Char('k') if key.modifiers == KeyModifiers::NONE => {
+                self.bundle_state.selected_index =
+                    self.bundle_state.selected_index.saturating_sub(1);
+            }
+            KeyCode::Enter => {
+                if let Some(bundle) = self
+                    .bundle_state
+                    .bundles
+                    .get(self.bundle_state.selected_index)
+                {
+                    let mut installed = 0usize;
+                    let mut errors = Vec::new();
+                    for skill_name in &bundle.skills {
+                        match self.installer.install(skill_name, &[], Scope::Global) {
+                            Ok(()) => installed += 1,
+                            Err(e) => errors.push(format!("{skill_name}: {e}")),
+                        }
+                    }
+                    if errors.is_empty() {
+                        self.bundle_state.result_message = Some(format!(
+                            "Installed {installed} skill(s) from \"{}\"",
+                            bundle.name
+                        ));
+                    } else {
+                        self.bundle_state.result_message = Some(format!(
+                            "Installed {installed}/{} skill(s). Errors: {}",
+                            bundle.skills.len(),
+                            errors.join("; "),
+                        ));
+                    }
+                    self.needs_refresh = true;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_ssh_key(&mut self, key: crossterm::event::KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.view = View::List;
+            }
+            KeyCode::Down | KeyCode::Char('j') if key.modifiers == KeyModifiers::NONE => {
+                let len = self.ssh_state.hosts.len();
+                if len > 0 && self.ssh_state.selected_index + 1 < len {
+                    self.ssh_state.selected_index += 1;
+                }
+            }
+            KeyCode::Up | KeyCode::Char('k') if key.modifiers == KeyModifiers::NONE => {
+                self.ssh_state.selected_index = self.ssh_state.selected_index.saturating_sub(1);
+            }
+            KeyCode::Enter => {
+                if let Some(host) = self.ssh_state.hosts.get(self.ssh_state.selected_index) {
+                    self.ssh_state.connection_status =
+                        Some(self.ssh_connector.check_connection(host));
+                    match self.ssh_connector.list_skills(host) {
+                        Ok(skills) => {
+                            self.ssh_state.skills = skills;
+                            self.ssh_state.error = None;
+                        }
+                        Err(e) => {
+                            self.ssh_state.skills.clear();
+                            self.ssh_state.error = Some(e);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn activate_phase_preset(&mut self, phase: Phase) {
         let profiles = self.profile_store.list().unwrap_or_default();
         if let Some(profile) = profiles
@@ -1134,7 +1322,7 @@ mod tests {
     use super::*;
     use ai_skill_core::{CatalogEntry, ValidationState};
     use crossterm::event::{KeyEvent, KeyEventKind, KeyEventState};
-    use std::{cell::RefCell, path::PathBuf};
+    use std::{cell::RefCell, path::Path, path::PathBuf};
 
     struct FakeCatalog(Vec<CatalogEntry>);
 
@@ -1292,6 +1480,14 @@ mod tests {
             self.profiles.borrow_mut().retain(|p| p.name != name);
             Ok(())
         }
+        fn export(&self, name: &str, _dest: &Path) -> Result<(), Box<dyn std::error::Error>> {
+            let profiles = self.profiles.borrow();
+            if profiles.iter().any(|p| p.name == name) {
+                Ok(())
+            } else {
+                Err(format!("profile '{name}' not found").into())
+            }
+        }
     }
 
     #[derive(Default)]
@@ -1343,6 +1539,17 @@ mod tests {
 
     type TestApp = App<FakeCatalog, FakeInstaller, FakeToggler>;
 
+    struct FakeBundleStore;
+    impl BundleStore for FakeBundleStore {
+        fn list(&self) -> Result<Vec<Bundle>, Box<dyn std::error::Error>> {
+            Ok(vec![Bundle {
+                name: "test-bundle".into(),
+                description: "Test".into(),
+                skills: vec!["alpha".into()],
+            }])
+        }
+    }
+
     fn make_app(skills: Vec<Skill>) -> TestApp {
         App::new(
             skills,
@@ -1353,6 +1560,10 @@ mod tests {
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
             Box::new(FakeSettingsStore),
+            Box::new(ai_skill_core::NoopExternalScanner),
+            Box::new(ai_skill_core::NoopSignatureVerifier),
+            Box::new(ai_skill_core::NoopSshConnector),
+            Box::new(FakeBundleStore),
         )
     }
 
@@ -1556,6 +1767,10 @@ mod tests {
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
             Box::new(FakeSettingsStore),
+            Box::new(ai_skill_core::NoopExternalScanner),
+            Box::new(ai_skill_core::NoopSignatureVerifier),
+            Box::new(ai_skill_core::NoopSshConnector),
+            Box::new(FakeBundleStore),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('o')));
@@ -1574,6 +1789,10 @@ mod tests {
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
             Box::new(FakeSettingsStore),
+            Box::new(ai_skill_core::NoopExternalScanner),
+            Box::new(ai_skill_core::NoopSignatureVerifier),
+            Box::new(ai_skill_core::NoopSshConnector),
+            Box::new(FakeBundleStore),
         );
         app.view = View::Search;
         app.search_state.query = "om".to_string();
@@ -1592,6 +1811,10 @@ mod tests {
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
             Box::new(FakeSettingsStore),
+            Box::new(ai_skill_core::NoopExternalScanner),
+            Box::new(ai_skill_core::NoopSignatureVerifier),
+            Box::new(ai_skill_core::NoopSshConnector),
+            Box::new(FakeBundleStore),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('x')));
@@ -1621,6 +1844,10 @@ mod tests {
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
             Box::new(FakeSettingsStore),
+            Box::new(ai_skill_core::NoopExternalScanner),
+            Box::new(ai_skill_core::NoopSignatureVerifier),
+            Box::new(ai_skill_core::NoopSshConnector),
+            Box::new(FakeBundleStore),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('x')));
@@ -1842,6 +2069,10 @@ mod tests {
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
             Box::new(FakeSettingsStore),
+            Box::new(ai_skill_core::NoopExternalScanner),
+            Box::new(ai_skill_core::NoopSignatureVerifier),
+            Box::new(ai_skill_core::NoopSshConnector),
+            Box::new(FakeBundleStore),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('o'))); // search to get results

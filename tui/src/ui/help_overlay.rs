@@ -14,6 +14,8 @@ Tab         cycle scope filter (all → global → project)
 Enter       open skill detail
 s           open catalog search
 S           project settings (auto-trigger)
+R           SSH remote management
+b           bundles (predefined skill sets)
 p           profiles / presets
 F1-F4       apply phase preset (init/dev/test/release)
 ?           show this help

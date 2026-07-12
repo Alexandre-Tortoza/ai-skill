@@ -1,6 +1,6 @@
-//! Core domain model: [`Scope`] and [`Skill`].
+//! Core domain model: [`Scope`], [`Agent`] and [`Skill`].
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::{DriftState, SkillMode, ValidationState};
 use serde::Serialize;
@@ -14,6 +14,63 @@ pub enum Scope {
     Global,
     /// Scoped to a single project directory.
     Project,
+}
+
+/// Supported AI agents that can host skills.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Agent {
+    ClaudeCode,
+    Cursor,
+    Windsurf,
+    GitHubCopilot,
+    Codex,
+    GeminiCli,
+    OpenCode,
+}
+
+impl Agent {
+    /// Human-readable label for this agent.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Agent::ClaudeCode => "Claude Code",
+            Agent::Cursor => "Cursor",
+            Agent::Windsurf => "Windsurf",
+            Agent::GitHubCopilot => "GitHub Copilot",
+            Agent::Codex => "Codex",
+            Agent::GeminiCli => "Gemini CLI",
+            Agent::OpenCode => "OpenCode",
+        }
+    }
+
+    /// Subdirectory name under `$HOME` where this agent keeps its skills.
+    fn home_subdir(&self) -> Option<&'static str> {
+        match self {
+            Agent::ClaudeCode => Some(".claude/skills"),
+            Agent::Cursor => Some(".cursor/skills"),
+            Agent::Windsurf => Some(".windsurf/skills"),
+            Agent::Codex => Some(".codex/skills"),
+            Agent::GeminiCli => Some(".gemini-cli/skills"),
+            // Agents without a known file-based skill directory.
+            Agent::GitHubCopilot => None,
+            Agent::OpenCode => None,
+        }
+    }
+
+    /// Returns the skill directory path for this agent under the given home dir.
+    pub fn home_skills_dir(&self, home: &Path) -> Option<PathBuf> {
+        self.home_subdir().map(|sub| home.join(sub))
+    }
+
+    /// Returns all known agents that use Claude-compatible skill format.
+    pub fn claude_compatible() -> Vec<Agent> {
+        vec![
+            Agent::ClaudeCode,
+            Agent::Cursor,
+            Agent::Windsurf,
+            Agent::Codex,
+            Agent::GeminiCli,
+        ]
+    }
 }
 
 /// A single installed skill with its metadata, validation state, and drift info.
@@ -44,6 +101,41 @@ pub struct Skill {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn agent_variants_have_labels() {
+        assert_eq!(Agent::ClaudeCode.label(), "Claude Code");
+        assert_eq!(Agent::Cursor.label(), "Cursor");
+        assert_eq!(Agent::Windsurf.label(), "Windsurf");
+    }
+
+    #[test]
+    fn claude_code_has_skills_dir() {
+        let home = Path::new("/home/user");
+        assert_eq!(
+            Agent::ClaudeCode.home_skills_dir(home),
+            Some(PathBuf::from("/home/user/.claude/skills"))
+        );
+    }
+
+    #[test]
+    fn copilot_has_no_skills_dir() {
+        let home = Path::new("/home/user");
+        assert_eq!(Agent::GitHubCopilot.home_skills_dir(home), None);
+    }
+
+    #[test]
+    fn claude_compatible_includes_cursor() {
+        let agents = Agent::claude_compatible();
+        assert!(agents.contains(&Agent::Cursor));
+        assert!(!agents.contains(&Agent::GitHubCopilot));
+    }
+
+    #[test]
+    fn agents_are_distinct() {
+        assert_ne!(Agent::ClaudeCode, Agent::Cursor);
+        assert_ne!(Agent::Cursor, Agent::Windsurf);
+    }
 
     fn make_skill(name: &str, scope: Scope) -> Skill {
         Skill {

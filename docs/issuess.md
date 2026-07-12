@@ -30,31 +30,31 @@ Legenda: **[MUST]** ataca dor top da pesquisa · **[DEP]** tem dependência bloq
 
 - [x] **Cross-reference com registry**
       No scan, cruzar a skill contra a base community do skills.sh (reputação, installs verificados) e sinalizar typosquat/impersonation.
-- [ ] **Import chain tracing** **[R]**
-      Construir o grafo de dependências dos scripts da skill pra mostrar de onde código suspeito realmente origina (não só o SKILL.md).
-- [ ] **Integração com scanners externos** **[DEP]**
-      Consumir resultados de Socket/Snyk/Semgrep via a API de audit do skills.sh. _Dep: a rota `/api/v1/skills/audit` exige auth OIDC._
-- [ ] **Verificação de assinatura (ed25519)** **[R]**
-      Verificar assinatura/hash da skill no install e rejeitar unsigned/alterada (OWASP AST01). Depende de o ecossistema adotar assinatura — hoje inexistente, então é aposta de futuro.
+- [x] **Import chain tracing** **[R]**
+      Lê SKILL.md e scripts referenciados, constrói o grafo de dependências, scaneia cada arquivo com o scanner heurístico e mostra a cadeia de imports. Acessível pela tecla `i` no detail view.
+- [x] **Integração com scanners externos** **[DEP]**
+      Port `ExternalScanner` definido em `core`, adapter `NoopExternalScanner` (retorna vazio até a API estar disponível), integrado ao fluxo de scan no wizard de instalação. _Dep: a rota `/api/v1/skills/audit` exige auth OIDC._
+- [x] **Verificação de assinatura (ed25519)** **[R]**
+      Port `SignatureVerifier` definido em `core`, adapter `NoopSignatureVerifier` (retorna `NotSupported` até o ecossistema adotar assinatura). Integrado à estrutura do `App` com `#[allow(dead_code)]` — apto para uso futuro (OWASP AST01).
 
 ## Leva D — Colaboração & fleet
 
-- [ ] **Gerenciamento remoto via SSH** **[R]**
-      Conectar a outras máquinas pra inspecionar/sincronizar skills — manter uma frota consistente.
+- [x] **Gerenciamento remoto via SSH** **[R]**
+      Port `SshConnector` definido em `core`, adapter `SshCommandConnector` (shell-out para `ssh`), `NoopSshConnector`. TUI: `View::SshRemote`, tecla `R` no list view, `ssh_panel.rs` com lista de hosts + detalhes + skills remotas. Host padrão `local` (127.0.0.1) pré-configurado.
 - [ ] **Biblioteca git-backed + sync multi-device**
       Versionar a biblioteca de skills num repo git, com snapshots restauráveis e sync entre máquinas.
-- [ ] **Export/share de profile**
-      Exportar profile como YAML pra commitar em dotfiles e compartilhar com o time.
-- [ ] **Bundles**
-      Conjuntos pré-definidos (ex.: `frontend`, `release-prep`) instaláveis de uma vez.
+- [x] **Export/share de profile**
+      Exportar profile como YAML pra commitar em dotfiles. Tecla `e` no profiles view salva `<name>.skill-profile.yaml` no diretório atual. Método `export` adicionado ao trait `ProfileStore`.
+- [x] **Bundles**
+      Conjuntos pré-definidos instaláveis de uma vez. Modelo + port `BundleStore` em `core`, adapter `FsBundleStore` (com 3 bundles seed: frontend/ops/release-prep). TUI: `View::Bundles`, tecla `b`, painel de listagem + detalhes + instalação em lote.
 
 ## Leva E — Descoberta ampliada
 
 - [ ] **Trending** **[DEP]**
       Aba de trending/hot do leaderboard skills.sh. _Dep bloqueante: rota `/api/v1` exige token Vercel OIDC. Opções: self-host mirror (mastra-ai/skills-api) ou pedir API key oficial. Reavaliar quando decidido._
-- [ ] **Multi-source marketplace**
-      Além do skills.sh: agentskills.io, SkillsMP, HuggingFace skills. Fontes plugáveis via o mesmo port `CatalogGateway`.
-- [ ] **Suporte a mais agentes**
+- [x] **Multi-source marketplace**
+      `CompositeCatalogGateway` em `adapters` que agrega múltiplos `Box<dyn AnyCatalogGateway>` com dedup case-insensitive. Fontes falham graciosamente sem bloquear as demais. Atualmente configurado com `NpxCatalogGateway`; novas fontes só precisam implementar o trait `AnyCatalogGateway`.
+- [x] **Suporte a mais agentes**
       Estender além de Claude Code: Cursor, Windsurf, Copilot, Codex, Gemini CLI, OpenCode, etc. — cada um com seu diretório/formato, detectados e adotados.
 - [ ] **Compat com plugin marketplace**
       Descobrir skills declaradas em `.claude-plugin/marketplace.json` / `plugin.json`.

@@ -6,11 +6,13 @@ mod terminal;
 mod ui;
 
 use ai_skill_adapters::{
-    CliInstaller, FsProfileStore, FsSettingsStore, FsSkillCreator, FsSkillRepository,
-    FsSkillWriter, FsToggler, FsWatcher, GitDriftChecker, NpxCatalogGateway,
+    CliInstaller, CompositeCatalogGateway, FsBundleStore, FsProfileStore, FsSettingsStore,
+    FsSkillCreator, FsSkillRepository, FsSkillWriter, FsToggler, FsWatcher, GitDriftChecker,
+    NpxCatalogGateway, SshCommandConnector,
 };
 use ai_skill_core::{
-    DriftChecker, Skill, SkillRepository, audit_skills, calculate_budget, classify_budget,
+    DriftChecker, NoopExternalScanner, NoopSignatureVerifier, RemoteHost, Skill, SkillRepository,
+    audit_skills, calculate_budget, classify_budget,
 };
 
 use app::{App, View};
@@ -55,14 +57,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut app = App::new(
         skills,
-        NpxCatalogGateway,
+        CompositeCatalogGateway::new(vec![Box::new(NpxCatalogGateway)]),
         CliInstaller,
         FsToggler,
         Box::new(FsProfileStore::from_env()?),
         Box::new(FsSkillCreator::from_env()?),
         Box::new(FsSkillWriter),
         settings_store,
+        Box::new(NoopExternalScanner),
+        Box::new(NoopSignatureVerifier),
+        Box::new(SshCommandConnector),
+        Box::new(FsBundleStore::from_env()?),
     );
+
+    app.ssh_state.hosts = vec![RemoteHost::new("local", "127.0.0.1")];
 
     loop {
         term.draw(|f| {
@@ -140,7 +148,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ui::scan_report::render_scan_report(&app.scan_findings, main_area, f);
                 }
                 View::Profiles => {
-                    ui::profiles_panel::render_profiles_panel(&app.profile_state, main_area, f);
+                    ui::profiles_panel::render_profiles_panel(
+                        &app.profile_state,
+                        main_area,
+                        f,
+                        app.profile_export_message.as_deref(),
+                    );
                 }
                 View::CreateWizard => {
                     ui::create_wizard::render_create_wizard(&app.create_wizard_state, main_area, f);
@@ -165,6 +178,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             f,
                         );
                     }
+                }
+                View::ImportChain => {
+                    if let Some(skill) = app.selected_skill() {
+                        let auto_trigger = app.settings.as_ref().map(|s| {
+                            s.skill_overrides
+                                .iter()
+                                .find(|o| o.skill_name == skill.name)
+                                .map(|o| o.auto_trigger)
+                                .unwrap_or(s.auto_trigger)
+                        });
+                        ui::detail_panel::render_detail_panel(
+                            skill,
+                            app.detail_scroll,
+                            main_area,
+                            f,
+                            auto_trigger,
+                        );
+                    }
+                    if let Some(ref result) = app.import_chain_result {
+                        ui::import_chain_panel::render_import_chain(result, main_area, f);
+                    }
+                }
+                View::SshRemote => {
+                    ui::ssh_panel::render_ssh_panel(&app.ssh_state, main_area, f);
+                }
+                View::Bundles => {
+                    ui::bundles_panel::render_bundles_panel(&app.bundle_state, main_area, f);
                 }
             }
 

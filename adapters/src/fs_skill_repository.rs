@@ -1,8 +1,8 @@
 //! Filesystem-based [`SkillRepository`] that scans `~/.claude/skills/` directories.
 
 use ai_skill_core::{
-    DriftState, Scope, Skill, SkillMode, SkillRepository, ValidationState, detect_duplicates,
-    extract_body, parse_frontmatter,
+    Agent, DriftState, Scope, Skill, SkillMode, SkillRepository, ValidationState,
+    detect_duplicates, extract_body, parse_frontmatter,
 };
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -18,10 +18,11 @@ pub enum RepositoryError {
     Io(#[from] std::io::Error),
 }
 
-/// Scans `~/.claude/skills/` (global) and optionally `<project>/.claude/skills/` (project).
+/// Scans known agent skill directories for installed skills.
 pub struct FsSkillRepository {
     global_root: PathBuf,
     project_root: Option<PathBuf>,
+    extra_roots: Vec<(PathBuf, String)>,
 }
 
 impl FsSkillRepository {
@@ -30,13 +31,16 @@ impl FsSkillRepository {
         Self {
             global_root,
             project_root,
+            extra_roots: vec![],
         }
     }
 
-    /// Resolves roots from `$HOME` and the current working directory.
+    /// Resolves roots from `$HOME` and the current working directory,
+    /// including all known claude-compatible agent directories.
     pub fn from_env() -> Result<Self, RepositoryError> {
         let home = std::env::var("HOME").map_err(|_| RepositoryError::MissingHome)?;
-        let global_root = PathBuf::from(home).join(".claude").join("skills");
+        let home_path = PathBuf::from(&home);
+        let global_root = home_path.join(".claude").join("skills");
 
         let cwd = std::env::current_dir()?;
         let project_candidate = cwd.join(".claude").join("skills");
@@ -46,10 +50,29 @@ impl FsSkillRepository {
             None
         };
 
-        Ok(Self::new(global_root, project_root))
+        let mut extra = Vec::new();
+        for agent in Agent::claude_compatible() {
+            if agent == Agent::ClaudeCode {
+                continue;
+            }
+            if let Some(dir) = agent.home_skills_dir(&home_path) {
+                extra.push((dir, agent.label().to_string()));
+            }
+        }
+
+        Ok(Self {
+            global_root,
+            project_root,
+            extra_roots: extra,
+        })
     }
 
-    fn scan_root(&self, root: &PathBuf, scope: Scope) -> Result<Vec<Skill>, RepositoryError> {
+    fn scan_root(
+        &self,
+        root: &PathBuf,
+        scope: Scope,
+        agent_name: &str,
+    ) -> Result<Vec<Skill>, RepositoryError> {
         if !root.is_dir() {
             return Ok(Vec::new());
         }
@@ -71,7 +94,7 @@ impl FsSkillRepository {
                         name: base.to_string(),
                         path: entry_path.clone(),
                         scope: scope.clone(),
-                        agents: vec![],
+                        agents: vec![agent_name.to_string()],
                         tags: vec![],
                         managed: false,
                         mode: SkillMode::Disabled,
@@ -90,7 +113,7 @@ impl FsSkillRepository {
                         name: dir_name,
                         path: entry_path,
                         scope: scope.clone(),
-                        agents: vec![],
+                        agents: vec![agent_name.to_string()],
                         tags: vec![],
                         managed: false,
                         mode: SkillMode::Active,
@@ -114,7 +137,7 @@ impl FsSkillRepository {
                         name: dir_name,
                         path: canonical,
                         scope: scope.clone(),
-                        agents: vec![],
+                        agents: vec![agent_name.to_string()],
                         tags: vec![],
                         managed: false,
                         mode: SkillMode::Active,
@@ -133,7 +156,7 @@ impl FsSkillRepository {
                         name: dir_name,
                         path: canonical,
                         scope: scope.clone(),
-                        agents: vec![],
+                        agents: vec![agent_name.to_string()],
                         tags: vec![],
                         managed: false,
                         mode: SkillMode::Active,
@@ -156,11 +179,17 @@ impl FsSkillRepository {
             let mode = detect_mode(&canonical);
             let manifest_content = extract_body(&content).map(str::to_owned);
 
+            let mut agents = metadata.agents;
+            let agent_label = agent_name.to_string();
+            if !agents.contains(&agent_label) {
+                agents.push(agent_label);
+            }
+
             skills.push(Skill {
                 name: metadata.name,
                 path: canonical.clone(),
                 scope: scope.clone(),
-                agents: metadata.agents,
+                agents,
                 tags: metadata.tags,
                 managed: canonical.join(".ai-skill").exists(),
                 mode,
@@ -192,10 +221,14 @@ impl SkillRepository for FsSkillRepository {
     type Error = RepositoryError;
 
     fn list(&self) -> Result<Vec<Skill>, RepositoryError> {
-        let mut skills = self.scan_root(&self.global_root, Scope::Global)?;
+        let mut skills = self.scan_root(&self.global_root, Scope::Global, "Claude Code")?;
 
         if let Some(ref project_root) = self.project_root {
-            skills.extend(self.scan_root(project_root, Scope::Project)?);
+            skills.extend(self.scan_root(project_root, Scope::Project, "Claude Code")?);
+        }
+
+        for (dir, agent_name) in &self.extra_roots {
+            skills.extend(self.scan_root(dir, Scope::Global, agent_name)?);
         }
 
         let dups = detect_duplicates(&skills);
@@ -361,7 +394,7 @@ mod tests {
         let beta = skills.iter().find(|s| s.name == "beta").unwrap();
         assert_eq!(alpha.scope, Scope::Global);
         assert_eq!(beta.scope, Scope::Project);
-        assert_eq!(beta.agents, vec!["claude"]);
+        assert_eq!(beta.agents, vec!["claude", "Claude Code"]);
     }
 
     #[test]

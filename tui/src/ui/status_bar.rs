@@ -26,12 +26,15 @@ pub fn render_status_bar(
         View::Confirm => "y confirm  n / Esc cancel",
         View::InstallWizard => "Tab scope  Space agent  Enter confirm  Esc back",
         View::ScanReport => "Enter install anyway  Esc cancel",
-        View::Profiles => "j/k move  a activate  f from-current  d delete  Esc back",
+        View::Profiles => "j/k move  a activate  e export  f from-current  d delete  Esc back",
         View::CreateWizard => "Tab next field  Enter create (on Preview)  Esc cancel",
         View::Editor => "Tab next field  Enter save  Esc cancel",
         View::Audit => "Esc back",
         View::Budget => "Esc back",
         View::Settings => "t toggle  j/k move  o toggle override  d remove  Esc save & back",
+        View::ImportChain => "Esc close",
+        View::SshRemote => "j/k move  Enter connect  Esc back",
+        View::Bundles => "j/k move  Enter install  Esc back",
     };
 
     let warning_span = match budget_warning {

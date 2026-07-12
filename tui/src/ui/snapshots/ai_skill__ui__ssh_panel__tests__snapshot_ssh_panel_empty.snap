@@ -1,0 +1,38 @@
+---
+source: tui/src/ui/ssh_panel.rs
+expression: terminal.backend().buffer().clone()
+---
+Buffer {
+    area: Rect { x: 0, y: 0, width: 80, height: 24 },
+    content: [
+        "                                                                                ",
+        "                                                                                ",
+        "                                                                                ",
+        "┌ SSH Remote Management ───────────────────────────────────────────────────────┐",
+        "│┌Hosts────────────────────────┐┌Details──────────────────────────────────────┐│",
+        "││                             ││No hosts configured.                         ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "││                             ││                                             ││",
+        "│└─────────────────────────────┘└─────────────────────────────────────────────┘│",
+        "└──────────────────────────────────────────────────────────────────────────────┘",
+    ],
+    styles: [
+        x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 1, y: 3, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 24, y: 3, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+    ]
+}
