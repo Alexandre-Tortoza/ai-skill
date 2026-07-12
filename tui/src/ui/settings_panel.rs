@@ -30,22 +30,36 @@ pub fn render_settings_panel(
     ])
     .split(area);
 
-    let path_str = state
-        .project_path
-        .as_deref()
-        .unwrap_or("(no project)");
+    let path_str = state.project_path.as_deref().unwrap_or("(no project)");
     let header = Paragraph::new(Line::from(vec![
-        Span::styled("Project settings: ", Style::default().add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Project settings: ",
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
         Span::raw(path_str),
     ]))
-    .block(Block::default().borders(Borders::ALL).title(" Project Settings "));
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(" Project Settings "),
+    );
     frame.render_widget(header, chunks[0]);
 
     let auto_trigger_str = if settings.auto_trigger { "ON" } else { "OFF" };
-    let auto_color = if settings.auto_trigger { Color::Green } else { Color::Red };
+    let auto_color = if settings.auto_trigger {
+        Color::Green
+    } else {
+        Color::Red
+    };
     let global_line = Line::from(vec![
-        Span::styled("Global auto-trigger: ", Style::default().add_modifier(Modifier::BOLD)),
-        Span::styled(auto_trigger_str, fg(auto_color).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Global auto-trigger: ",
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            auto_trigger_str,
+            fg(auto_color).add_modifier(Modifier::BOLD),
+        ),
         Span::raw("    [t] toggle"),
     ]);
     let attrs = if state.editing_global {
@@ -53,14 +67,19 @@ pub fn render_settings_panel(
     } else {
         Style::default()
     };
-    let global_widget = Paragraph::new(global_line)
-        .style(attrs)
-        .block(Block::default().borders(Borders::ALL).title(" Auto-Trigger "));
+    let global_widget = Paragraph::new(global_line).style(attrs).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(" Auto-Trigger "),
+    );
     frame.render_widget(global_widget, chunks[1]);
 
     if settings.skill_overrides.is_empty() {
-        let msg = Paragraph::new(" No skill overrides. Press [a] to add selected skill.")
-            .block(Block::default().borders(Borders::ALL).title(" Skill Overrides "));
+        let msg = Paragraph::new(" No skill overrides. Press [a] to add selected skill.").block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Skill Overrides "),
+        );
         frame.render_widget(msg, chunks[2]);
     } else {
         let items: Vec<ListItem> = settings
@@ -69,8 +88,16 @@ pub fn render_settings_panel(
             .enumerate()
             .map(|(i, o)| {
                 let trigger_str = if o.auto_trigger { "ON" } else { "OFF" };
-                let trigger_color = if o.auto_trigger { Color::Green } else { Color::Red };
-                let prefix = if i == state.selected_override_index { "> " } else { "  " };
+                let trigger_color = if o.auto_trigger {
+                    Color::Green
+                } else {
+                    Color::Red
+                };
+                let prefix = if i == state.selected_override_index {
+                    "> "
+                } else {
+                    "  "
+                };
                 ListItem::new(Line::from(vec![
                     Span::styled(prefix, fg(Color::Yellow)),
                     Span::raw(format!("{}  ", o.skill_name)),
@@ -81,7 +108,11 @@ pub fn render_settings_panel(
             .collect();
 
         let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title(" Skill Overrides "))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" Skill Overrides "),
+            )
             .highlight_style(bg(Color::Blue).add_modifier(Modifier::BOLD));
         let mut list_state = ListState::default();
         if !settings.skill_overrides.is_empty() {
@@ -97,10 +128,7 @@ mod tests {
     use ai_skill_core::SkillOverride;
     use ratatui::{Terminal, backend::TestBackend};
 
-    fn render_settings(
-        settings: &ProjectSettings,
-        state: &SettingsState,
-    ) -> String {
+    fn render_settings(settings: &ProjectSettings, state: &SettingsState) -> String {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
@@ -132,12 +160,10 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         let settings = ProjectSettings {
             auto_trigger: false,
-            skill_overrides: vec![
-                SkillOverride {
-                    skill_name: "alpha".into(),
-                    auto_trigger: false,
-                },
-            ],
+            skill_overrides: vec![SkillOverride {
+                skill_name: "alpha".into(),
+                auto_trigger: false,
+            }],
         };
         let state = SettingsState::default();
         terminal
@@ -171,12 +197,10 @@ mod tests {
     fn shows_override_skill_name() {
         let settings = ProjectSettings {
             auto_trigger: true,
-            skill_overrides: vec![
-                SkillOverride {
-                    skill_name: "my-skill".into(),
-                    auto_trigger: false,
-                },
-            ],
+            skill_overrides: vec![SkillOverride {
+                skill_name: "my-skill".into(),
+                auto_trigger: false,
+            }],
         };
         let state = SettingsState::default();
         let rendered = render_settings(&settings, &state);

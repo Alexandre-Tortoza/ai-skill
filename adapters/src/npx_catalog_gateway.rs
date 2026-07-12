@@ -60,12 +60,16 @@ mod tests {
     fn search_without_npx_returns_error() {
         let dir = TempDir::new().unwrap();
         let original_path = env::var("PATH").unwrap_or_default();
-        unsafe { env::set_var("PATH", dir.path().to_str().unwrap()); }
+        unsafe {
+            env::set_var("PATH", dir.path().to_str().unwrap());
+        }
 
         let gw = NpxCatalogGateway;
         let result = gw.search("test");
 
-        unsafe { env::set_var("PATH", &original_path); }
+        unsafe {
+            env::set_var("PATH", &original_path);
+        }
         assert!(result.is_err());
     }
 
@@ -88,7 +92,9 @@ mod tests {
         let gw = NpxCatalogGateway;
         let results = gw.search("test").unwrap();
 
-        unsafe { env::set_var("PATH", &original_path); }
+        unsafe {
+            env::set_var("PATH", &original_path);
+        }
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].name, "my-skill");
         assert_eq!(results[0].url, Some("https://example.com".to_string()));

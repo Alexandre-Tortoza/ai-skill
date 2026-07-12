@@ -547,7 +547,10 @@ mod tests {
     fn repository_error_io_construction() {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "test");
         let err = RepositoryError::Io(io_err);
-        assert!(err.to_string().contains("filesystem error while reading skills"));
+        assert!(
+            err.to_string()
+                .contains("filesystem error while reading skills")
+        );
     }
 
     #[test]

@@ -38,9 +38,15 @@ fn render_profile_list(state: &ProfileState, area: Rect, frame: &mut Frame) {
             };
             let mut spans = vec![Span::raw(p.name.clone())];
             if let Some((badge, color)) = phase_badge {
-                spans.push(Span::styled(format!(" {badge}"), fg(color).add_modifier(Modifier::BOLD)));
+                spans.push(Span::styled(
+                    format!(" {badge}"),
+                    fg(color).add_modifier(Modifier::BOLD),
+                ));
             }
-            spans.push(Span::styled(format!("  ({count} skills)"), fg(Color::DarkGray)));
+            spans.push(Span::styled(
+                format!("  ({count} skills)"),
+                fg(Color::DarkGray),
+            ));
             ListItem::new(Line::from(spans))
         })
         .collect();

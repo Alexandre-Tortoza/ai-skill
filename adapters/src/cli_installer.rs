@@ -139,12 +139,16 @@ mod tests {
     fn install_without_npx_returns_io_error() {
         let dir = TempDir::new().unwrap();
         let original_path = env::var("PATH").unwrap_or_default();
-        unsafe { env::set_var("PATH", dir.path().to_str().unwrap()); }
+        unsafe {
+            env::set_var("PATH", dir.path().to_str().unwrap());
+        }
 
         let installer = CliInstaller;
         let result = installer.install("test", &[], Scope::Global);
 
-        unsafe { env::set_var("PATH", &original_path); }
+        unsafe {
+            env::set_var("PATH", &original_path);
+        }
         assert!(result.is_err());
     }
 
@@ -152,12 +156,16 @@ mod tests {
     fn remove_without_npx_returns_io_error() {
         let dir = TempDir::new().unwrap();
         let original_path = env::var("PATH").unwrap_or_default();
-        unsafe { env::set_var("PATH", dir.path().to_str().unwrap()); }
+        unsafe {
+            env::set_var("PATH", dir.path().to_str().unwrap());
+        }
 
         let installer = CliInstaller;
         let result = installer.remove(Path::new("/tmp/test"));
 
-        unsafe { env::set_var("PATH", &original_path); }
+        unsafe {
+            env::set_var("PATH", &original_path);
+        }
         assert!(result.is_err());
     }
 
@@ -165,12 +173,16 @@ mod tests {
     fn update_without_npx_returns_io_error() {
         let dir = TempDir::new().unwrap();
         let original_path = env::var("PATH").unwrap_or_default();
-        unsafe { env::set_var("PATH", dir.path().to_str().unwrap()); }
+        unsafe {
+            env::set_var("PATH", dir.path().to_str().unwrap());
+        }
 
         let installer = CliInstaller;
         let result = installer.update(Path::new("/tmp/test"));
 
-        unsafe { env::set_var("PATH", &original_path); }
+        unsafe {
+            env::set_var("PATH", &original_path);
+        }
         assert!(result.is_err());
     }
 
@@ -192,7 +204,9 @@ mod tests {
         let installer = CliInstaller;
         let result = installer.install("test-skill", &[], Scope::Global);
 
-        unsafe { env::set_var("PATH", &original_path); }
+        unsafe {
+            env::set_var("PATH", &original_path);
+        }
         assert!(result.is_ok());
     }
 
@@ -214,7 +228,9 @@ mod tests {
         let installer = CliInstaller;
         let result = installer.install("test-skill", &[], Scope::Global);
 
-        unsafe { env::set_var("PATH", &original_path); }
+        unsafe {
+            env::set_var("PATH", &original_path);
+        }
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("status 1"));

@@ -62,19 +62,14 @@ pub fn lint_description(
     // Exclude skills whose name matches original_name (the skill being edited).
     let collides = all_skills
         .iter()
-        .filter(|s| {
-            original_name
-                .is_none_or(|orig| s.name.to_lowercase() != orig.to_lowercase())
-        })
+        .filter(|s| original_name.is_none_or(|orig| s.name.to_lowercase() != orig.to_lowercase()))
         .any(|s| s.name.to_lowercase() == current_name.to_lowercase());
     if collides {
         let conflicting: Vec<&str> = all_skills
             .iter()
             .filter(|s| {
                 s.name.to_lowercase() == current_name.to_lowercase()
-                    && original_name.is_none_or(|orig| {
-                        s.name.to_lowercase() != orig.to_lowercase()
-                    })
+                    && original_name.is_none_or(|orig| s.name.to_lowercase() != orig.to_lowercase())
             })
             .map(|s| s.name.as_str())
             .collect();
@@ -86,9 +81,7 @@ pub fn lint_description(
         warnings.push(LintWarning {
             level: LintLevel::Error,
             field: "name",
-            message: format!(
-                "Name collides with {detail} (case-insensitive match)."
-            ),
+            message: format!("Name collides with {detail} (case-insensitive match)."),
         });
     }
 
@@ -111,11 +104,7 @@ pub fn lint_content(
 /// Validates wizard input before creating a new skill.
 ///
 /// Returns a list of error messages. Empty list means input is valid.
-pub fn validate_wizard_input(
-    name: &str,
-    agents: &[String],
-    all_skills: &[Skill],
-) -> Vec<String> {
+pub fn validate_wizard_input(name: &str, agents: &[String], all_skills: &[Skill]) -> Vec<String> {
     let mut errors: Vec<String> = Vec::new();
 
     let name = name.trim();
@@ -124,7 +113,9 @@ pub fn validate_wizard_input(
     }
 
     if name.contains('/') || name.contains('\0') || name.contains('\\') {
-        errors.push("Skill name contains invalid characters ('/', '\\\\', or null byte).".to_string());
+        errors.push(
+            "Skill name contains invalid characters ('/', '\\\\', or null byte).".to_string(),
+        );
     }
 
     if agents.is_empty() {
@@ -155,7 +146,9 @@ pub fn validate_name(name: &str) -> Vec<String> {
         errors.push("Skill name cannot be empty.".to_string());
     }
     if name.contains('/') || name.contains('\0') || name.contains('\\') {
-        errors.push("Skill name contains invalid characters ('/', '\\\\', or null byte).".to_string());
+        errors.push(
+            "Skill name contains invalid characters ('/', '\\\\', or null byte).".to_string(),
+        );
     }
     errors
 }
@@ -222,7 +215,12 @@ mod tests {
     fn warns_on_name_collision_with_original() {
         let all = vec![skill("my-skill"), skill("other")];
         // Editing "other", changing name to "my-skill" — collision with existing "my-skill"
-        let warnings = lint_description("Use when testing. Runs tests.", "my-skill", &all, Some("other"));
+        let warnings = lint_description(
+            "Use when testing. Runs tests.",
+            "my-skill",
+            &all,
+            Some("other"),
+        );
         assert!(warnings.iter().any(|w| w.field == "name"));
     }
 
@@ -230,7 +228,12 @@ mod tests {
     fn no_collision_warning_for_same_name_with_original() {
         let all = vec![skill("my-skill")];
         // Editing "my-skill", keeping same name — no collision
-        let warnings = lint_description("Use when testing. Runs tests.", "my-skill", &all, Some("my-skill"));
+        let warnings = lint_description(
+            "Use when testing. Runs tests.",
+            "my-skill",
+            &all,
+            Some("my-skill"),
+        );
         assert!(!warnings.iter().any(|w| w.field == "name"));
     }
 
@@ -238,7 +241,12 @@ mod tests {
     fn no_collision_warning_for_case_change() {
         let all = vec![skill("my-skill")];
         // Editing "my-skill", changing case to "My-Skill" — same skill, no collision
-        let warnings = lint_description("Use when testing. Runs tests.", "My-Skill", &all, Some("my-skill"));
+        let warnings = lint_description(
+            "Use when testing. Runs tests.",
+            "My-Skill",
+            &all,
+            Some("my-skill"),
+        );
         assert!(!warnings.iter().any(|w| w.field == "name"));
     }
 
