@@ -23,6 +23,21 @@ impl SkillToggler for FsToggler {
         Ok(())
     }
 
+    fn collapse(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = resolve_skill_dir(path);
+        std::fs::write(dir.join(".name-only"), "")?;
+        Ok(())
+    }
+
+    fn expand(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = resolve_skill_dir(path);
+        let marker = dir.join(".name-only");
+        if marker.exists() {
+            std::fs::remove_file(marker)?;
+        }
+        Ok(())
+    }
+
     fn adopt(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         std::fs::write(path.join(".ai-skill"), "")?;
         Ok(())
@@ -36,6 +51,25 @@ impl SkillToggler for FsToggler {
 
     fn preview_disable(&self, path: &Path) -> String {
         format!("rename {} → {}.disabled", path.display(), path.display())
+    }
+
+    fn preview_collapse(&self, path: &Path) -> String {
+        format!("write .name-only marker in {}", path.display())
+    }
+
+    fn preview_expand(&self, path: &Path) -> String {
+        format!("remove .name-only marker from {}", path.display())
+    }
+}
+
+/// If the path ends with `.disabled`, resolve to the parent as the skill directory;
+/// otherwise use the path as-is.
+fn resolve_skill_dir(path: &Path) -> std::path::PathBuf {
+    let path_str = path.to_string_lossy();
+    if let Some(base) = path_str.strip_suffix(".disabled") {
+        Path::new(base).to_path_buf()
+    } else {
+        path.to_path_buf()
     }
 }
 

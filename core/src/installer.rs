@@ -28,18 +28,26 @@ pub trait SkillInstaller {
     fn preview_update(&self, path: &Path) -> String;
 }
 
-/// Port for enabling, disabling, and adopting skills.
+/// Port for enabling, disabling, collapsing (name-only), expanding, and adopting skills.
 pub trait SkillToggler {
     /// Enables a previously disabled skill.
     fn enable(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>>;
     /// Disables a skill without removing it.
     fn disable(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>>;
+    /// Collapses a skill to name-only mode (writes a `.name-only` marker).
+    fn collapse(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>>;
+    /// Expands a name-only skill back to full mode (removes the `.name-only` marker).
+    fn expand(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>>;
     /// Adopts an unmanaged skill, registering it in the lock file.
     fn adopt(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>>;
     /// Returns a human-readable command preview for enabling.
     fn preview_enable(&self, path: &Path) -> String;
     /// Returns a human-readable command preview for disabling.
     fn preview_disable(&self, path: &Path) -> String;
+    /// Returns a human-readable command preview for collapsing.
+    fn preview_collapse(&self, path: &Path) -> String;
+    /// Returns a human-readable command preview for expanding.
+    fn preview_expand(&self, path: &Path) -> String;
 }
 
 #[cfg(test)]
@@ -95,6 +103,12 @@ mod tests {
         fn disable(&self, _path: &Path) -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
+        fn collapse(&self, _path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
+        }
+        fn expand(&self, _path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
+        }
         fn adopt(&self, _path: &Path) -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
@@ -103,6 +117,12 @@ mod tests {
         }
         fn preview_disable(&self, path: &Path) -> String {
             format!("disable {}", path.display())
+        }
+        fn preview_collapse(&self, path: &Path) -> String {
+            format!("collapse {}", path.display())
+        }
+        fn preview_expand(&self, path: &Path) -> String {
+            format!("expand {}", path.display())
         }
     }
 

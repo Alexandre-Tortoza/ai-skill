@@ -1,13 +1,23 @@
 //! Bottom status bar showing keyboard hints per view.
 
-use ratatui::{Frame, layout::Rect, style::Color, widgets::Paragraph};
+use ai_skill_core::BudgetWarning;
+use ratatui::{
+    Frame, layout::Rect, style::{Color, Style}, text::{Line, Span}, widgets::Paragraph,
+};
 
 use crate::{app::View, ui::style_helpers::fg_bg};
 
-/// Renders a single-line status bar with view-specific key hints.
-pub fn render_status_bar(view: &View, area: Rect, frame: &mut Frame) {
+/// Renders a single-line status bar with view-specific key hints and optional budget warning.
+pub fn render_status_bar(
+    view: &View,
+    area: Rect,
+    frame: &mut Frame,
+    budget_warning: Option<&BudgetWarning>,
+) {
     let hints = match view {
-        View::List => "j/k  d dis  e edit  r rm  u up  a adopt  c new  A audit  s search  ? quit",
+        View::List => {
+            "j/k  d dis  e edit  n name  r rm  u up  a adopt  c new  A aud  B bud  s srch  ? quit"
+        }
         View::Detail => "j/k scroll  Esc back  q quit",
         View::Search => "type search  j/k move  Enter install  Esc back",
         View::Help => "Esc close",
@@ -18,9 +28,38 @@ pub fn render_status_bar(view: &View, area: Rect, frame: &mut Frame) {
         View::CreateWizard => "Tab next field  Enter create (on Preview)  Esc cancel",
         View::Editor => "Tab next field  Enter save  Esc cancel",
         View::Audit => "Esc back",
+        View::Budget => "Esc back",
     };
 
-    let bar = Paragraph::new(hints).style(fg_bg(Color::Black, Color::DarkGray));
+    let warning_span = match budget_warning {
+        Some(BudgetWarning::None) | None => None,
+        Some(BudgetWarning::Approaching { pct }) => Some(Span::styled(
+            format!(" ! {pct:.0}%"),
+            Style::default().fg(Color::Yellow),
+        )),
+        Some(BudgetWarning::Critical { pct }) => Some(Span::styled(
+            format!(" !! {pct:.0}%"),
+            Style::default().fg(Color::Red).add_modifier(
+                ratatui::style::Modifier::BOLD,
+            ),
+        )),
+        Some(BudgetWarning::OverBudget { pct, .. }) => Some(Span::styled(
+            format!(" OVER {pct:.0}%"),
+            Style::default().fg(Color::LightRed).add_modifier(
+                ratatui::style::Modifier::BOLD,
+            ),
+        )),
+    };
+
+    let content = match warning_span {
+        Some(span) => Line::from(vec![
+            Span::raw(hints),
+            span,
+        ]),
+        None => Line::from(Span::raw(hints)),
+    };
+
+    let bar = Paragraph::new(content).style(fg_bg(Color::Black, Color::DarkGray));
     frame.render_widget(bar, area);
 }
 
@@ -30,10 +69,10 @@ mod tests {
     use ratatui::{Terminal, backend::TestBackend};
 
     fn render_bar(view: View) -> String {
-        let backend = TestBackend::new(80, 1);
+        let backend = TestBackend::new(84, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&view, f.area(), f))
+            .draw(|f| render_status_bar(&view, f.area(), f, None))
             .unwrap();
         terminal
             .backend()
@@ -46,20 +85,20 @@ mod tests {
 
     #[test]
     fn snapshot_list_view() {
-        let backend = TestBackend::new(80, 1);
+        let backend = TestBackend::new(84, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&View::List, f.area(), f))
+            .draw(|f| render_status_bar(&View::List, f.area(), f, None))
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
     }
 
     #[test]
     fn snapshot_detail_view() {
-        let backend = TestBackend::new(80, 1);
+        let backend = TestBackend::new(84, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&View::Detail, f.area(), f))
+            .draw(|f| render_status_bar(&View::Detail, f.area(), f, None))
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
     }
@@ -82,5 +121,46 @@ mod tests {
     #[test]
     fn help_view_shows_close_hint() {
         assert!(render_bar(View::Help).contains("close"));
+    }
+
+    #[test]
+    fn budget_warning_approaching_shows_pct() {
+        let backend = TestBackend::new(90, 1);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                render_status_bar(
+                    &View::Detail,
+                    f.area(),
+                    f,
+                    Some(&BudgetWarning::Approaching { pct: 85.0 }),
+                )
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer().clone();
+        let text: String = buf.content().iter().map(|c| c.symbol()).collect();
+        assert!(text.contains("85%"));
+    }
+
+    #[test]
+    fn budget_warning_over_budget_shows_pct() {
+        let backend = TestBackend::new(90, 1);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                render_status_bar(
+                    &View::Detail,
+                    f.area(),
+                    f,
+                    Some(&BudgetWarning::OverBudget {
+                        pct: 120.0,
+                        truncated_skills: 2,
+                    }),
+                )
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer().clone();
+        let text: String = buf.content().iter().map(|c| c.symbol()).collect();
+        assert!(text.contains("120%"));
     }
 }

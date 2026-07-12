@@ -9,7 +9,9 @@ use ai_skill_adapters::{
     CliInstaller, FsProfileStore, FsSkillCreator, FsSkillRepository, FsSkillWriter, FsToggler,
     FsWatcher, GitDriftChecker, NpxCatalogGateway,
 };
-use ai_skill_core::{DriftChecker, Skill, SkillRepository, audit_skills};
+use ai_skill_core::{
+    DriftChecker, Skill, SkillRepository, audit_skills, calculate_budget, classify_budget,
+};
 use app::{App, View};
 use event::next_event;
 use ratatui::layout::{Constraint, Layout};
@@ -133,9 +135,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 View::Audit => {
                     ui::audit_panel::render_audit_panel(&app.all_skills, main_area, f);
                 }
+                View::Budget => {
+                    ui::budget_panel::render_budget_panel(&app.budget, main_area, f);
+                }
             }
 
-            ui::status_bar::render_status_bar(&app.view, status_area, f);
+            let warning = classify_budget(&app.budget);
+            ui::status_bar::render_status_bar(&app.view, status_area, f, Some(&warning));
         })?;
 
         if watcher
@@ -153,6 +159,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if app.needs_refresh {
             if let Ok(mut skills) = repo.list() {
                 apply_drift(&mut skills, &drift_checker);
+                app.budget = calculate_budget(&skills);
                 app.all_skills = skills;
             }
             app.needs_refresh = false;
