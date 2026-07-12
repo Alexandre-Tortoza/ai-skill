@@ -46,16 +46,18 @@ fn default_true() -> bool {
 impl From<ClaudeSettings> for ProjectSettings {
     fn from(cs: ClaudeSettings) -> Self {
         let section = cs.skills.unwrap_or_default();
+        let mut skill_overrides: Vec<_> = section
+            .skill_overrides
+            .into_iter()
+            .map(|(name, override_)| SkillOverride {
+                skill_name: name,
+                auto_trigger: override_.auto_trigger,
+            })
+            .collect();
+        skill_overrides.sort_by(|a, b| a.skill_name.cmp(&b.skill_name));
         ProjectSettings {
             auto_trigger: section.auto_trigger,
-            skill_overrides: section
-                .skill_overrides
-                .into_iter()
-                .map(|(name, override_)| SkillOverride {
-                    skill_name: name,
-                    auto_trigger: override_.auto_trigger,
-                })
-                .collect(),
+            skill_overrides,
         }
     }
 }

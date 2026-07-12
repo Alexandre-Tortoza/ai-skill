@@ -35,14 +35,15 @@ fn agents_arg(agents: &[String]) -> Option<String> {
     }
 }
 
-impl SkillInstaller for CliInstaller {
-    fn install(
+impl CliInstaller {
+    fn install_with_npx(
         &self,
+        npx: &Path,
         name: &str,
         agents: &[String],
         scope: Scope,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::new("npx");
+        let mut cmd = Command::new(npx);
         cmd.args(["skills", "add", name, scope_flag(&scope)]);
         if let Some(a) = agents_arg(agents) {
             cmd.args(["--agents", &a]);
@@ -54,8 +55,8 @@ impl SkillInstaller for CliInstaller {
         Ok(())
     }
 
-    fn remove(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-        let status = Command::new("npx")
+    fn remove_with_npx(&self, npx: &Path, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        let status = Command::new(npx)
             .args(["skills", "remove", &path.to_string_lossy()])
             .status()
             .map_err(CliInstallerError::Io)?;
@@ -65,8 +66,8 @@ impl SkillInstaller for CliInstaller {
         Ok(())
     }
 
-    fn update(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-        let status = Command::new("npx")
+    fn update_with_npx(&self, npx: &Path, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        let status = Command::new(npx)
             .args(["skills", "update", &path.to_string_lossy()])
             .status()
             .map_err(CliInstallerError::Io)?;
@@ -74,6 +75,25 @@ impl SkillInstaller for CliInstaller {
             return Err(CliInstallerError::NonZeroExit(status.code().unwrap_or(-1)).into());
         }
         Ok(())
+    }
+}
+
+impl SkillInstaller for CliInstaller {
+    fn install(
+        &self,
+        name: &str,
+        agents: &[String],
+        scope: Scope,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.install_with_npx(Path::new("npx"), name, agents, scope)
+    }
+
+    fn remove(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        self.remove_with_npx(Path::new("npx"), path)
+    }
+
+    fn update(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        self.update_with_npx(Path::new("npx"), path)
     }
 
     fn preview_install(&self, name: &str, agents: &[String], scope: Scope) -> String {
@@ -103,11 +123,18 @@ impl SkillInstaller for CliInstaller {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use std::fs;
+    use std::io::Write;
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
     use tempfile::TempDir;
+
+    fn write_executable(path: &Path, content: &str) {
+        let mut file = fs::File::create(path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+        drop(file);
+        fs::set_permissions(path, PermissionsExt::from_mode(0o755)).unwrap();
+    }
 
     #[test]
     fn cli_installer_error_io_construction() {
@@ -138,51 +165,33 @@ mod tests {
     #[test]
     fn install_without_npx_returns_io_error() {
         let dir = TempDir::new().unwrap();
-        let original_path = env::var("PATH").unwrap_or_default();
-        unsafe {
-            env::set_var("PATH", dir.path().to_str().unwrap());
-        }
+        let missing_npx = dir.path().join("npx");
 
         let installer = CliInstaller;
-        let result = installer.install("test", &[], Scope::Global);
+        let result = installer.install_with_npx(&missing_npx, "test", &[], Scope::Global);
 
-        unsafe {
-            env::set_var("PATH", &original_path);
-        }
         assert!(result.is_err());
     }
 
     #[test]
     fn remove_without_npx_returns_io_error() {
         let dir = TempDir::new().unwrap();
-        let original_path = env::var("PATH").unwrap_or_default();
-        unsafe {
-            env::set_var("PATH", dir.path().to_str().unwrap());
-        }
+        let missing_npx = dir.path().join("npx");
 
         let installer = CliInstaller;
-        let result = installer.remove(Path::new("/tmp/test"));
+        let result = installer.remove_with_npx(&missing_npx, Path::new("/tmp/test"));
 
-        unsafe {
-            env::set_var("PATH", &original_path);
-        }
         assert!(result.is_err());
     }
 
     #[test]
     fn update_without_npx_returns_io_error() {
         let dir = TempDir::new().unwrap();
-        let original_path = env::var("PATH").unwrap_or_default();
-        unsafe {
-            env::set_var("PATH", dir.path().to_str().unwrap());
-        }
+        let missing_npx = dir.path().join("npx");
 
         let installer = CliInstaller;
-        let result = installer.update(Path::new("/tmp/test"));
+        let result = installer.update_with_npx(&missing_npx, Path::new("/tmp/test"));
 
-        unsafe {
-            env::set_var("PATH", &original_path);
-        }
         assert!(result.is_err());
     }
 
@@ -190,23 +199,11 @@ mod tests {
     fn install_with_mock_npx_succeeds() {
         let dir = TempDir::new().unwrap();
         let mock_path = dir.path().join("npx");
-        fs::write(&mock_path, "#!/bin/sh\nexit 0\n").unwrap();
-        fs::set_permissions(&mock_path, PermissionsExt::from_mode(0o755)).unwrap();
-
-        let original_path = env::var("PATH").unwrap_or_default();
-        unsafe {
-            env::set_var(
-                "PATH",
-                format!("{}:{}", dir.path().display(), original_path),
-            );
-        }
+        write_executable(&mock_path, "#!/bin/sh\nexit 0\n");
 
         let installer = CliInstaller;
-        let result = installer.install("test-skill", &[], Scope::Global);
+        let result = installer.install_with_npx(&mock_path, "test-skill", &[], Scope::Global);
 
-        unsafe {
-            env::set_var("PATH", &original_path);
-        }
         assert!(result.is_ok());
     }
 
@@ -214,23 +211,11 @@ mod tests {
     fn install_with_mock_npx_exit_1_returns_error() {
         let dir = TempDir::new().unwrap();
         let mock_path = dir.path().join("npx");
-        fs::write(&mock_path, "#!/bin/sh\nexit 1\n").unwrap();
-        fs::set_permissions(&mock_path, PermissionsExt::from_mode(0o755)).unwrap();
-
-        let original_path = env::var("PATH").unwrap_or_default();
-        unsafe {
-            env::set_var(
-                "PATH",
-                format!("{}:{}", dir.path().display(), original_path),
-            );
-        }
+        write_executable(&mock_path, "#!/bin/sh\nexit 1\n");
 
         let installer = CliInstaller;
-        let result = installer.install("test-skill", &[], Scope::Global);
+        let result = installer.install_with_npx(&mock_path, "test-skill", &[], Scope::Global);
 
-        unsafe {
-            env::set_var("PATH", &original_path);
-        }
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("status 1"));

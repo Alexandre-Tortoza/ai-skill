@@ -1,13 +1,18 @@
 //! Adapter that queries the remote skill catalog via `npx skills find`.
 
 use ai_skill_core::{AnyCatalogGateway, CatalogEntry};
+use std::path::Path;
 
 /// Searches the remote catalog by shelling out to `npx skills find <keyword>`.
 pub struct NpxCatalogGateway;
 
-impl AnyCatalogGateway for NpxCatalogGateway {
-    fn search(&self, keyword: &str) -> Result<Vec<CatalogEntry>, Box<dyn std::error::Error>> {
-        let output = std::process::Command::new("npx")
+impl NpxCatalogGateway {
+    fn search_with_npx(
+        &self,
+        npx: &Path,
+        keyword: &str,
+    ) -> Result<Vec<CatalogEntry>, Box<dyn std::error::Error>> {
+        let output = std::process::Command::new(npx)
             .args(["skills", "find", keyword])
             .output()?;
 
@@ -17,6 +22,12 @@ impl AnyCatalogGateway for NpxCatalogGateway {
         }
 
         parse_npx_output(&output.stdout)
+    }
+}
+
+impl AnyCatalogGateway for NpxCatalogGateway {
+    fn search(&self, keyword: &str) -> Result<Vec<CatalogEntry>, Box<dyn std::error::Error>> {
+        self.search_with_npx(Path::new("npx"), keyword)
     }
 }
 
@@ -51,25 +62,26 @@ fn parse_npx_output(raw: &[u8]) -> Result<Vec<CatalogEntry>, Box<dyn std::error:
 mod tests {
     use super::*;
     use ai_skill_core::AnyCatalogGateway;
-    use std::env;
     use std::fs;
+    use std::io::Write;
     use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
+
+    fn write_executable(path: &Path, content: &str) {
+        let mut file = fs::File::create(path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+        drop(file);
+        fs::set_permissions(path, PermissionsExt::from_mode(0o755)).unwrap();
+    }
 
     #[test]
     fn search_without_npx_returns_error() {
         let dir = TempDir::new().unwrap();
-        let original_path = env::var("PATH").unwrap_or_default();
-        unsafe {
-            env::set_var("PATH", dir.path().to_str().unwrap());
-        }
+        let missing_npx = dir.path().join("npx");
 
         let gw = NpxCatalogGateway;
-        let result = gw.search("test");
+        let result = gw.search_with_npx(&missing_npx, "test");
 
-        unsafe {
-            env::set_var("PATH", &original_path);
-        }
         assert!(result.is_err());
     }
 
@@ -78,23 +90,11 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let mock_path = dir.path().join("npx");
         let output = "my-skill\tDoes things\thttps://example.com\nother\tOther skill\n";
-        fs::write(&mock_path, format!("#!/bin/sh\necho \"{output}\"\n")).unwrap();
-        fs::set_permissions(&mock_path, PermissionsExt::from_mode(0o755)).unwrap();
-
-        let original_path = env::var("PATH").unwrap_or_default();
-        unsafe {
-            env::set_var(
-                "PATH",
-                format!("{}:{}", dir.path().display(), original_path),
-            );
-        }
+        write_executable(&mock_path, &format!("#!/bin/sh\nprintf '%s' '{output}'\n"));
 
         let gw = NpxCatalogGateway;
-        let results = gw.search("test").unwrap();
+        let results = gw.search_with_npx(&mock_path, "test").unwrap();
 
-        unsafe {
-            env::set_var("PATH", &original_path);
-        }
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].name, "my-skill");
         assert_eq!(results[0].url, Some("https://example.com".to_string()));

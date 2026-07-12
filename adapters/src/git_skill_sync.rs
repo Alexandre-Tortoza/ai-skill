@@ -215,6 +215,13 @@ mod tests {
         (tmp, sync)
     }
 
+    fn configure_identity(sync: &GitSkillSync) {
+        sync.run_git(&["config", "user.name", "ai-skill test"])
+            .unwrap();
+        sync.run_git(&["config", "user.email", "ai-skill-test@example.invalid"])
+            .unwrap();
+    }
+
     #[test]
     fn uninitialized_dir_returns_uninitialized() {
         let (_tmp, sync) = setup();
@@ -241,6 +248,7 @@ mod tests {
     fn snapshot_and_list() {
         let (_tmp, sync) = setup();
         sync.init().unwrap();
+        configure_identity(&sync);
 
         // Create a snapshot.
         std::fs::write(sync.root.join("test-skill.md"), "# test").unwrap();
@@ -256,6 +264,7 @@ mod tests {
     fn restore_after_snapshot() {
         let (_tmp, sync) = setup();
         sync.init().unwrap();
+        configure_identity(&sync);
 
         // Add a file and snapshot.
         std::fs::write(sync.root.join("my-skill.md"), "v1").unwrap();
@@ -313,6 +322,7 @@ mod tests {
     fn snapshot_uses_provided_message() {
         let (_tmp, sync) = setup();
         sync.init().unwrap();
+        configure_identity(&sync);
         std::fs::write(sync.root.join("a.md"), "a").unwrap();
         let hash = sync.snapshot("my snapshot").unwrap();
         assert!(!hash.is_empty());
