@@ -25,8 +25,6 @@ pub enum ValidationState {
         /// Path of the first installed instance.
         conflicts_with: PathBuf,
     },
-    /// Skill has been explicitly disabled by the user.
-    Disabled,
 }
 
 #[cfg(test)]
@@ -67,12 +65,6 @@ mod tests {
     fn orphan_lock_variant_constructs() {
         let v = ValidationState::OrphanLock;
         assert!(matches!(v, ValidationState::OrphanLock));
-    }
-
-    #[test]
-    fn disabled_variant_constructs() {
-        let v = ValidationState::Disabled;
-        assert!(matches!(v, ValidationState::Disabled));
     }
 
     #[test]

@@ -29,7 +29,7 @@ pub fn detect_duplicates(skills: &[Skill]) -> Vec<(usize, PathBuf)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Scope, ValidationState};
+    use crate::{Scope, SkillMode, ValidationState};
 
     fn skill(name: &str, path: &str) -> Skill {
         Skill {
@@ -39,6 +39,7 @@ mod tests {
             agents: vec![],
             tags: vec![],
             managed: false,
+            mode: SkillMode::Active,
             validation: ValidationState::Valid,
             manifest_content: None,
             drift_state: crate::DriftState::default(),
@@ -78,6 +79,7 @@ mod tests {
                 agents: vec![],
                 tags: vec![],
                 managed: false,
+                mode: SkillMode::Active,
                 validation: ValidationState::Valid,
                 manifest_content: None,
                 drift_state: crate::DriftState::default(),
@@ -89,6 +91,7 @@ mod tests {
                 agents: vec![],
                 tags: vec![],
                 managed: false,
+                mode: SkillMode::Active,
                 validation: ValidationState::Valid,
                 manifest_content: None,
                 drift_state: crate::DriftState::default(),

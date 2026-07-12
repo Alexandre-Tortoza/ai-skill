@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
@@ -82,7 +82,7 @@ jobs:
           Compress-Archive -Path $staging -DestinationPath "$staging.zip"
 
       - name: Upload package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ai-skill-${{ matrix.target }}
           path: ai-skill-${{ matrix.target }}.${{ matrix.archive }}
@@ -97,7 +97,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
@@ -169,7 +169,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Resolve version
         id: version
@@ -188,7 +188,7 @@ jobs:
           echo "number=${version#v}" >> "$GITHUB_OUTPUT"
 
       - name: Download Linux tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ai-skill-x86_64-unknown-linux-gnu
           path: dist/input
@@ -217,7 +217,7 @@ jobs:
           args: pkg --packager rpm --target dist/packages/
 
       - name: Upload Linux packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ai-skill-linux-packages
           path: dist/packages/*
@@ -233,7 +233,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Resolve version
         id: version
@@ -253,7 +253,7 @@ jobs:
           echo "number=${version#v}" >> "$GITHUB_OUTPUT"
 
       - name: Download packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -285,7 +285,7 @@ jobs:
           } > release-body.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.version }}
           name: ai-skill ${{ steps.version.outputs.version }}
@@ -319,7 +319,7 @@ jobs:
           echo "number=${version#v}" >> "$GITHUB_OUTPUT"
 
       - name: Download release packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -341,7 +341,7 @@ jobs:
           fi
 
       - name: Checkout Homebrew tap
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: alexmrtr/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -461,7 +461,7 @@ jobs:
           fi
 
       - name: Download release packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true

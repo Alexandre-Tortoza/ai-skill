@@ -77,7 +77,7 @@ fn render_section(title: &str, skills: &[&Skill], color: Color, area: Rect, fram
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ai_skill_core::{DriftState, Scope, Skill, ValidationState};
+    use ai_skill_core::{DriftState, Scope, Skill, SkillMode, ValidationState};
     use ratatui::{Terminal, backend::TestBackend};
     use std::path::PathBuf;
 
@@ -89,6 +89,7 @@ mod tests {
             agents: vec!["claude".to_string()],
             tags: vec![],
             managed: false,
+            mode: SkillMode::Active,
             validation,
             manifest_content: None,
             drift_state: DriftState::default(),

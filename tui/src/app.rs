@@ -1,13 +1,15 @@
 //! Application state, view transitions, and event handling.
 
 use ai_skill_core::{
-    AnyCatalogGateway, CatalogEntry, Profile, ProfileOp, ProfileStore, ScanFinding, Scope, Skill,
-    SkillCreator, SkillInstaller, SkillToggler, SkillWriter, ValidationState, scan_skill,
+    AnyCatalogGateway, CatalogEntry, ContextBudget, Phase, Profile, ProfileOp, ProfileStore,
+    ProjectSettings, ScanFinding, Scope, SettingsStore, Skill, SkillCreator, SkillInstaller,
+    SkillMode, SkillToggler, SkillWriter, calculate_budget, scan_skill,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::path::PathBuf;
 
 use crate::event::{AppEvent, is_quit};
+use crate::ui::settings_panel::SettingsState;
 
 /// The active screen (or overlay) in the TUI.
 #[derive(Debug, Clone, PartialEq)]
@@ -23,6 +25,8 @@ pub enum View {
     CreateWizard,
     Editor,
     Audit,
+    Budget,
+    Settings,
 }
 
 /// Steps in the create-skill wizard.
@@ -97,6 +101,8 @@ pub enum AppAction {
     Adopt { path: PathBuf },
     /// Activate a named profile (install/remove ops).
     ActivateProfile { name: String, ops: Vec<ProfileOp> },
+    /// Toggle a skill between name-only and full mode.
+    ToggleNameOnly { path: PathBuf },
 }
 
 /// State for the profiles panel.
@@ -207,6 +213,10 @@ pub struct App<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> {
     pub writer: Box<dyn SkillWriter>,
     pub create_wizard_state: CreateWizardState,
     pub editor_state: Option<EditorState>,
+    pub budget: ContextBudget,
+    pub settings_store: Box<dyn SettingsStore>,
+    pub settings: Option<ProjectSettings>,
+    pub settings_state: SettingsState,
     pub should_quit: bool,
 }
 
@@ -219,10 +229,13 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
         profile_store: Box<dyn ProfileStore>,
         creator: Box<dyn SkillCreator>,
         writer: Box<dyn SkillWriter>,
+        settings_store: Box<dyn SettingsStore>,
     ) -> Self {
         let profiles = profile_store.list().unwrap_or_default();
+        let budget = calculate_budget(&all_skills);
         Self {
             all_skills,
+            budget,
             view: View::List,
             view_before_confirm: View::List,
             list_state: ListUiState::new(),
@@ -247,6 +260,9 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             writer,
             create_wizard_state: CreateWizardState::default(),
             editor_state: None,
+            settings_store,
+            settings: None,
+            settings_state: SettingsState::default(),
             should_quit: false,
         }
     }
@@ -318,6 +334,8 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 View::CreateWizard => self.handle_create_wizard_key(key),
                 View::Editor => self.handle_editor_key(key),
                 View::Audit => self.handle_audit_key(key),
+                View::Budget => self.handle_audit_key(key),
+                View::Settings => self.handle_settings_key(key),
             },
             AppEvent::Resize => {}
         }
@@ -335,6 +353,13 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             AppAction::Enable { path } => self.toggler.preview_enable(path),
             AppAction::Disable { path } => self.toggler.preview_disable(path),
             AppAction::Adopt { path } => format!("adopt {}", path.display()),
+            AppAction::ToggleNameOnly { path } => {
+                let skill = self.all_skills.iter().find(|s| s.path == *path);
+                match skill.map(|s| s.mode) {
+                    Some(SkillMode::NameOnly) => self.toggler.preview_expand(path),
+                    _ => self.toggler.preview_collapse(path),
+                }
+            }
             AppAction::ActivateProfile { name, ops } => {
                 let installs = ops
                     .iter()
@@ -385,6 +410,13 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     AppAction::Update { path } => self.installer.update(path),
                     AppAction::Enable { path } => self.toggler.enable(path),
                     AppAction::Disable { path } => self.toggler.disable(path),
+                    AppAction::ToggleNameOnly { path } => {
+                        let skill = self.all_skills.iter().find(|s| s.path == *path);
+                        match skill.map(|s| s.mode) {
+                            Some(SkillMode::NameOnly) => self.toggler.expand(path),
+                            _ => self.toggler.collapse(path),
+                        }
+                    }
                     AppAction::Adopt { path } => self.toggler.adopt(path),
                     AppAction::ActivateProfile { .. } => unreachable!(),
                 };
@@ -453,7 +485,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 if key.modifiers == KeyModifiers::NONE
                     && self
                         .selected_skill()
-                        .map(|s| s.validation == ValidationState::Disabled)
+                        .map(|s| s.mode == SkillMode::Disabled)
                         .unwrap_or(false) =>
             {
                 if let Some(skill) = self.selected_skill() {
@@ -477,6 +509,13 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     self.pending_action = Some(AppAction::Update { path });
                     self.view_before_confirm = View::List;
                     self.view = View::Confirm;
+                }
+            }
+            KeyCode::Char('n') if key.modifiers == KeyModifiers::NONE => {
+                if let Some(skill) = self.selected_skill() {
+                    let path = skill.path.clone();
+                    self.pending_action = Some(AppAction::ToggleNameOnly { path });
+                    self.execute_pending_action();
                 }
             }
             KeyCode::Char('a')
@@ -512,7 +551,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 if key.modifiers == KeyModifiers::NONE
                     && self
                         .selected_skill()
-                        .map(|s| s.validation != ValidationState::Disabled)
+                        .map(|s| s.mode != SkillMode::Disabled)
                         .unwrap_or(false) =>
             {
                 if let Some(skill) = self.selected_skill() {
@@ -530,9 +569,21 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     self.view = View::Editor;
                 }
             }
+            KeyCode::Char('B') => {
+                self.view = View::Budget;
+            }
             KeyCode::Char('A') => {
                 self.view = View::Audit;
             }
+            KeyCode::Char('S') => {
+                self.settings = self.settings_store.read().ok();
+                self.settings_state = SettingsState::default();
+                self.view = View::Settings;
+            }
+            KeyCode::F(1) => self.activate_phase_preset(Phase::Init),
+            KeyCode::F(2) => self.activate_phase_preset(Phase::Dev),
+            KeyCode::F(3) => self.activate_phase_preset(Phase::Test),
+            KeyCode::F(4) => self.activate_phase_preset(Phase::Release),
             _ => {}
         }
     }
@@ -546,7 +597,38 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             KeyCode::Up | KeyCode::Char('k') if key.modifiers == KeyModifiers::NONE => {
                 self.detail_scroll = self.detail_scroll.saturating_sub(1);
             }
+            KeyCode::Char('o') if key.modifiers == KeyModifiers::NONE => {
+                if let Some(skill) = self.selected_skill().cloned() {
+                    self.toggle_skill_auto_trigger(&skill.name);
+                }
+            }
             _ => {}
+        }
+    }
+
+    fn toggle_skill_auto_trigger(&mut self, skill_name: &str) {
+        if self.settings.is_none() {
+            self.settings = self.settings_store.read().ok();
+        }
+        if let Some(ref mut settings) = self.settings {
+            let existing = settings
+                .skill_overrides
+                .iter_mut()
+                .find(|o| o.skill_name == skill_name);
+            match existing {
+                Some(override_) => {
+                    override_.auto_trigger = !override_.auto_trigger;
+                }
+                None => {
+                    settings.skill_overrides.push(
+                        ai_skill_core::SkillOverride {
+                            skill_name: skill_name.to_string(),
+                            auto_trigger: false,
+                        },
+                    );
+                }
+            }
+            let _ = self.settings_store.write(settings);
         }
     }
 
@@ -709,7 +791,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     let skill_names = self
                         .all_skills
                         .iter()
-                        .filter(|s| s.validation == ValidationState::Valid)
+                        .filter(|s| s.mode.is_enabled())
                         .map(|s| s.name.clone())
                         .collect();
                     let profile = Profile { name, skill_names, phase: None };
@@ -888,6 +970,72 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
         }
     }
 
+    fn activate_phase_preset(&mut self, phase: Phase) {
+        let profiles = self.profile_store.list().unwrap_or_default();
+        if let Some(profile) = profiles.into_iter().find(|p| p.phase == Some(phase.clone())) {
+            let ops = ai_skill_core::diff_profile(&self.all_skills, &profile);
+            if !ops.is_empty() {
+                let name = profile.name.clone();
+                self.pending_action = Some(AppAction::ActivateProfile { name, ops });
+                self.view_before_confirm = View::List;
+                self.view = View::Confirm;
+            }
+        }
+    }
+
+    fn handle_settings_key(&mut self, key: crossterm::event::KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                if self.settings_state.dirty {
+                    if let Some(ref settings) = self.settings {
+                        let _ = self.settings_store.write(settings);
+                    }
+                }
+                self.settings = None;
+                self.view = View::List;
+            }
+            KeyCode::Char('t') if key.modifiers == KeyModifiers::NONE => {
+                if let Some(ref mut settings) = self.settings {
+                    settings.auto_trigger = !settings.auto_trigger;
+                    self.settings_state.dirty = true;
+                }
+            }
+            KeyCode::Char('j') | KeyCode::Down if key.modifiers == KeyModifiers::NONE => {
+                if let Some(ref settings) = self.settings {
+                    if self.settings_state.selected_override_index + 1 < settings.skill_overrides.len() {
+                        self.settings_state.selected_override_index += 1;
+                    }
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up if key.modifiers == KeyModifiers::NONE => {
+                self.settings_state.selected_override_index =
+                    self.settings_state.selected_override_index.saturating_sub(1);
+            }
+            KeyCode::Char('o') if key.modifiers == KeyModifiers::NONE => {
+                if let Some(ref mut settings) = self.settings {
+                    let idx = self.settings_state.selected_override_index;
+                    if idx < settings.skill_overrides.len() {
+                        settings.skill_overrides[idx].auto_trigger =
+                            !settings.skill_overrides[idx].auto_trigger;
+                        self.settings_state.dirty = true;
+                    }
+                }
+            }
+            KeyCode::Char('d') if key.modifiers == KeyModifiers::NONE => {
+                if let Some(ref mut settings) = self.settings {
+                    let idx = self.settings_state.selected_override_index;
+                    if idx < settings.skill_overrides.len() {
+                        settings.skill_overrides.remove(idx);
+                        self.settings_state.selected_override_index =
+                            self.settings_state.selected_override_index.saturating_sub(1);
+                        self.settings_state.dirty = true;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn do_search(&mut self) {
         if self.search_state.query.is_empty() {
             self.search_state.results.clear();
@@ -989,6 +1137,18 @@ mod tests {
                 .push(format!("disable:{}", path.display()));
             Ok(())
         }
+        fn collapse(&self, path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+            self.calls
+                .borrow_mut()
+                .push(format!("collapse:{}", path.display()));
+            Ok(())
+        }
+        fn expand(&self, path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+            self.calls
+                .borrow_mut()
+                .push(format!("expand:{}", path.display()));
+            Ok(())
+        }
         fn adopt(&self, path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
             self.calls
                 .borrow_mut()
@@ -1000,6 +1160,12 @@ mod tests {
         }
         fn preview_disable(&self, path: &std::path::Path) -> String {
             format!("disable {}", path.display())
+        }
+        fn preview_collapse(&self, path: &std::path::Path) -> String {
+            format!("collapse {}", path.display())
+        }
+        fn preview_expand(&self, path: &std::path::Path) -> String {
+            format!("expand {}", path.display())
         }
     }
 
@@ -1029,6 +1195,7 @@ mod tests {
             agents: vec!["claude".to_string()],
             tags: vec![],
             managed: false,
+            mode: SkillMode::Active,
             validation: ValidationState::Valid,
             manifest_content: Some(format!("# {name}\nBody.").to_string()),
             drift_state: ai_skill_core::DriftState::default(),
@@ -1052,6 +1219,21 @@ mod tests {
         }
         fn delete(&self, name: &str) -> Result<(), Box<dyn std::error::Error>> {
             self.profiles.borrow_mut().retain(|p| p.name != name);
+            Ok(())
+        }
+    }
+
+    #[derive(Default)]
+    struct FakeSettingsStore;
+
+    impl SettingsStore for FakeSettingsStore {
+        fn read(&self) -> Result<ProjectSettings, Box<dyn std::error::Error>> {
+            Ok(ProjectSettings::default())
+        }
+        fn write(
+            &self,
+            _settings: &ProjectSettings,
+        ) -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
     }
@@ -1102,6 +1284,7 @@ mod tests {
             Box::new(FakeProfileStore::default()),
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
+            Box::new(FakeSettingsStore),
         )
     }
 
@@ -1304,6 +1487,7 @@ mod tests {
             Box::new(FakeProfileStore::default()),
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
+            Box::new(FakeSettingsStore),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('o')));
@@ -1321,6 +1505,7 @@ mod tests {
             Box::new(FakeProfileStore::default()),
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
+            Box::new(FakeSettingsStore),
         );
         app.view = View::Search;
         app.search_state.query = "om".to_string();
@@ -1338,6 +1523,7 @@ mod tests {
             Box::new(FakeProfileStore::default()),
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
+            Box::new(FakeSettingsStore),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('x')));
@@ -1366,6 +1552,7 @@ mod tests {
             Box::new(FakeProfileStore::default()),
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
+            Box::new(FakeSettingsStore),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('x')));
@@ -1385,6 +1572,7 @@ mod tests {
             agents: vec![],
             tags: tags.into_iter().map(str::to_string).collect(),
             managed: false,
+            mode: SkillMode::Active,
             validation: ValidationState::Valid,
             manifest_content: None,
             drift_state: ai_skill_core::DriftState::default(),
@@ -1467,9 +1655,17 @@ mod tests {
             agents: vec![],
             tags: vec![],
             managed: false,
+            mode: SkillMode::Active,
             validation: ValidationState::Valid,
             manifest_content: None,
             drift_state: ai_skill_core::DriftState::default(),
+        }
+    }
+
+    fn make_disabled_skill_at_path(name: &str, path: &str) -> Skill {
+        Skill {
+            mode: SkillMode::Disabled,
+            ..make_skill_at_path(name, path)
         }
     }
 
@@ -1502,10 +1698,7 @@ mod tests {
 
     #[test]
     fn e_key_on_disabled_skill_sets_enable_action_and_confirm_view() {
-        let mut app = make_app(vec![Skill {
-            validation: ValidationState::Disabled,
-            ..make_skill_at_path("alpha", "/skills/alpha.disabled")
-        }]);
+        let mut app = make_app(vec![make_disabled_skill_at_path("alpha", "/skills/alpha.disabled")]);
         app.handle_event(key(KeyCode::Char('e')));
         assert_eq!(app.view, View::Confirm);
         assert!(matches!(app.pending_action, Some(AppAction::Enable { .. })));
@@ -1577,6 +1770,7 @@ mod tests {
             Box::new(FakeProfileStore::default()),
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
+            Box::new(FakeSettingsStore),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('o'))); // search to get results
@@ -1937,14 +2131,68 @@ mod tests {
 
     #[test]
     fn e_key_on_disabled_skill_still_enables_not_opens_editor() {
-        let mut app = make_app(vec![Skill {
-            validation: ValidationState::Disabled,
-            ..make_skill_at_path("alpha", "/skills/alpha.disabled")
-        }]);
+        let mut app = make_app(vec![make_disabled_skill_at_path("alpha", "/skills/alpha.disabled")]);
         app.handle_event(key(KeyCode::Char('e')));
         assert_eq!(app.view, View::Confirm);
         assert!(matches!(app.pending_action, Some(AppAction::Enable { .. })));
         assert!(app.editor_state.is_none());
+    }
+
+    // ── name-only toggle ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn n_key_on_active_skill_calls_collapse_and_refreshes() {
+        let mut app = make_app(vec![make_skill_at_path("alpha", "/skills/alpha")]);
+        app.handle_event(key(KeyCode::Char('n')));
+        assert!(app.needs_refresh);
+        assert!(
+            app.toggler
+                .calls
+                .borrow()
+                .iter()
+                .any(|c| c.starts_with("collapse:"))
+        );
+    }
+
+    #[test]
+    fn n_key_on_name_only_skill_calls_expand_and_refreshes() {
+        let mut app = make_app(vec![Skill {
+            mode: SkillMode::NameOnly,
+            ..make_skill_at_path("alpha", "/skills/alpha")
+        }]);
+        app.handle_event(key(KeyCode::Char('n')));
+        assert!(app.needs_refresh);
+        assert!(
+            app.toggler
+                .calls
+                .borrow()
+                .iter()
+                .any(|c| c.starts_with("expand:"))
+        );
+    }
+
+    #[test]
+    fn n_key_on_disabled_skill_calls_collapse_and_preserves_pref() {
+        let mut app = make_app(vec![make_disabled_skill_at_path("alpha", "/skills/alpha.disabled")]);
+        app.handle_event(key(KeyCode::Char('n')));
+        assert!(app.needs_refresh);
+        assert!(
+            app.toggler
+                .calls
+                .borrow()
+                .iter()
+                .any(|c| c.starts_with("collapse:"))
+        );
+    }
+
+    #[test]
+    fn preview_for_action_toggle_name_only_active_shows_collapse() {
+        let app = make_app(vec![make_skill_at_path("alpha", "/tmp/alpha")]);
+        let action = AppAction::ToggleNameOnly {
+            path: PathBuf::from("/tmp/alpha"),
+        };
+        let preview = app.preview_for_action(&action);
+        assert!(preview.contains("collapse"));
     }
 
     // ── audit view (H4.6) ─────────────────────────────────────────────────────────

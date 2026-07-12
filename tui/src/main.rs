@@ -12,6 +12,7 @@ use ai_skill_adapters::{
 use ai_skill_core::{
     DriftChecker, Skill, SkillRepository, audit_skills, calculate_budget, classify_budget,
 };
+
 use app::{App, View};
 use event::next_event;
 use ratatui::layout::{Constraint, Layout};
