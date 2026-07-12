@@ -9,22 +9,12 @@ use ratatui::{
 
 use super::style_helpers::{bg, fg};
 
+#[derive(Default)]
 pub struct SettingsState {
     pub project_path: Option<String>,
     pub dirty: bool,
     pub selected_override_index: usize,
     pub editing_global: bool,
-}
-
-impl Default for SettingsState {
-    fn default() -> Self {
-        Self {
-            project_path: None,
-            dirty: false,
-            selected_override_index: 0,
-            editing_global: false,
-        }
-    }
 }
 
 pub fn render_settings_panel(

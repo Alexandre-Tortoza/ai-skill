@@ -32,7 +32,7 @@ pub fn render_create_wizard(state: &CreateWizardState, area: Rect, frame: &mut F
             ])
         };
 
-    let lines = vec![
+    let mut lines = vec![
         Line::from(Span::styled(
             "Create New Skill",
             Style::default().add_modifier(Modifier::BOLD),
@@ -51,13 +51,32 @@ pub fn render_create_wizard(state: &CreateWizardState, area: Rect, frame: &mut F
             "Tags (comma-separated)",
             &state.tags_input,
         ),
-        Line::raw(""),
-        if state.step == CreateStep::Preview {
-            Line::from(Span::styled("[ Press Enter to create ]", active))
-        } else {
-            Line::from(Span::styled("Tab: next field  Esc: cancel", inactive))
-        },
     ];
+
+    if !state.errors.is_empty() {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(Span::styled(
+            "Errors:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )));
+        for err in &state.errors {
+            lines.push(Line::from(Span::styled(format!("  ✗ {err}"), fg(Color::Red))));
+        }
+    }
+
+    lines.push(Line::raw(""));
+    if state.step == CreateStep::Preview {
+        if state.errors.is_empty() {
+            lines.push(Line::from(Span::styled("[ Press Enter to create ]", active)));
+        } else {
+            lines.push(Line::from(Span::styled(
+                "[ Fix errors above before creating ]",
+                fg(Color::Red),
+            )));
+        }
+    } else {
+        lines.push(Line::from(Span::styled("Tab: next field  Esc: cancel", inactive)));
+    }
 
     let widget = Paragraph::new(lines).block(
         Block::default()
@@ -109,6 +128,7 @@ mod tests {
             name: "my-skill".into(),
             agents_input: "claude".into(),
             tags_input: String::new(),
+            errors: vec![],
         };
         let rendered = render(&state);
         assert!(rendered.contains("Enter to create"));
@@ -121,6 +141,7 @@ mod tests {
             name: "test".into(),
             agents_input: String::new(),
             tags_input: String::new(),
+            errors: vec![],
         };
         let backend = TestBackend::new(60, 12);
         let mut terminal = Terminal::new(backend).unwrap();

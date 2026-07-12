@@ -1,5 +1,6 @@
 //! In-app editor for skill manifest frontmatter fields.
 
+use ai_skill_core::LintLevel;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -43,7 +44,7 @@ fn render_form(state: &EditorState, area: Rect, frame: &mut Frame) {
         ])
     };
 
-    let lines = vec![
+    let mut lines = vec![
         Line::from(Span::styled(
             "Edit Frontmatter",
             Style::default().add_modifier(Modifier::BOLD),
@@ -52,12 +53,31 @@ fn render_form(state: &EditorState, area: Rect, frame: &mut Frame) {
         field_line(EditField::Name, "Name", &state.name_input),
         field_line(EditField::Agents, "Agents", &state.agents_input),
         field_line(EditField::Tags, "Tags", &state.tags_input),
-        Line::raw(""),
-        Line::from(Span::styled(
-            "Tab: next field  Enter: save  Esc: cancel",
-            inactive,
-        )),
     ];
+
+    if !state.warnings.is_empty() {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(Span::styled(
+            "Warnings:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )));
+        for w in &state.warnings {
+            let style = match w.level {
+                LintLevel::Error => fg(Color::Red),
+                LintLevel::Warning => fg(Color::Yellow),
+            };
+            lines.push(Line::from(Span::styled(
+                format!("  ⚠ {}", w.message),
+                style,
+            )));
+        }
+    }
+
+    lines.push(Line::raw(""));
+    lines.push(Line::from(Span::styled(
+        "Tab: next field  Enter: save  Esc: cancel",
+        inactive,
+    )));
 
     let widget =
         Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title("Editor"));
@@ -105,6 +125,7 @@ mod tests {
             tags_input: skill.tags.join(", "),
             skill,
             field: EditField::default(),
+            warnings: vec![],
         }
     }
 
