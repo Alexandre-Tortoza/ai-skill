@@ -8,7 +8,7 @@ mod ui;
 use ai_skill_adapters::{
     CliInstaller, CompositeCatalogGateway, FsBundleStore, FsPluginDiscoverer, FsProfileStore,
     FsSettingsStore, FsSkillCreator, FsSkillRepository, FsSkillWriter, FsToggler, FsWatcher,
-    GitDriftChecker, NpxCatalogGateway, SshCommandConnector,
+    GitDriftChecker, GitSkillSync, NpxCatalogGateway, SshCommandConnector,
 };
 use ai_skill_core::{
     DriftChecker, NoopExternalScanner, NoopSignatureVerifier, PluginMarketplaceDiscovery,
@@ -110,6 +110,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Box::new(NoopSignatureVerifier),
         Box::new(SshCommandConnector),
         Box::new(FsBundleStore::from_env()?),
+        Box::new(GitSkillSync::new(
+            home_dir()?.join(".claude").join("skills"),
+        )),
     );
 
     app.ssh_state.hosts = vec![RemoteHost::new("local", "127.0.0.1")];
@@ -247,6 +250,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 View::Bundles => {
                     ui::bundles_panel::render_bundles_panel(&app.bundle_state, main_area, f);
+                }
+                View::Sync => {
+                    ui::sync_panel::render_sync_panel(&mut app.sync_state, main_area, f);
                 }
             }
 

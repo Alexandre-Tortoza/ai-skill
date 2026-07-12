@@ -35,6 +35,7 @@ pub fn render_status_bar(
         View::ImportChain => "Esc close",
         View::SshRemote => "j/k move  Enter connect  Esc back",
         View::Bundles => "j/k move  Enter install  Esc back",
+        View::Sync => "j/k move  Enter init/snap  r rstor  R remote  p push  P pull  Esc back",
     };
 
     let warning_span = match budget_warning {

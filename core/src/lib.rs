@@ -24,6 +24,7 @@ pub mod settings;
 pub mod signature;
 pub mod skill;
 pub mod ssh;
+pub mod sync;
 pub mod validation;
 
 /// Report grouping skills by their health category.
@@ -76,5 +77,7 @@ pub use signature::{NoopSignatureVerifier, SignatureVerifier, VerificationStatus
 pub use skill::{Agent, Scope, Skill};
 /// Port for SSH-based remote machine management.
 pub use ssh::{ConnectionStatus, NoopSshConnector, RemoteHost, RemoteSkill, SshConnector};
+/// Port and types for git-backed skill sync.
+pub use sync::{NoopSkillSync, SkillSync, Snapshot, SyncStatus};
 /// Validation state enum describing a skill's health.
 pub use validation::ValidationState;

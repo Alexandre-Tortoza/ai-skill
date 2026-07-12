@@ -20,3 +20,4 @@ pub mod skills_panel;
 pub mod ssh_panel;
 pub mod status_bar;
 pub mod style_helpers;
+pub mod sync_panel;

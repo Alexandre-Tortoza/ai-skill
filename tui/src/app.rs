@@ -5,8 +5,8 @@ use ai_skill_core::{
     AnyCatalogGateway, Bundle, BundleStore, CatalogEntry, ConnectionStatus, ContextBudget,
     ExternalScanner, LintWarning, Phase, Profile, ProfileOp, ProfileStore, ProjectSettings,
     RemoteHost, RemoteSkill, ScanFinding, Scope, SettingsStore, SignatureVerifier, Skill,
-    SkillCreator, SkillInstaller, SkillMode, SkillToggler, SkillWriter, SshConnector,
-    calculate_budget, cross_reference, scan_skill,
+    SkillCreator, SkillInstaller, SkillMode, SkillSync, SkillToggler, SkillWriter, Snapshot,
+    SshConnector, SyncStatus, calculate_budget, cross_reference, scan_skill,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::path::PathBuf;
@@ -29,10 +29,12 @@ pub enum View {
     Editor,
     Audit,
     Budget,
+    #[allow(dead_code)]
     Settings,
     ImportChain,
     SshRemote,
     Bundles,
+    Sync,
 }
 
 /// Steps in the create-skill wizard.
@@ -227,6 +229,29 @@ pub struct BundleState {
     pub result_message: Option<String>,
 }
 
+/// State for the sync panel.
+#[derive(Debug, Default)]
+pub struct SyncState {
+    /// Available snapshots.
+    pub snapshots: Vec<Snapshot>,
+    /// Current sync status.
+    pub status: Option<SyncStatus>,
+    /// Index of the selected snapshot.
+    pub selected_index: usize,
+    /// Message for snapshot creation.
+    pub snapshot_message: String,
+    /// Remote URL input.
+    pub remote_input: String,
+    /// Branch name input.
+    pub branch: String,
+    /// Error or success message.
+    pub message: Option<String>,
+    /// Whether we're prompting for snapshot message.
+    pub creating_snapshot: bool,
+    /// Whether we're prompting for remote.
+    pub configuring_remote: bool,
+}
+
 /// Top-level application state, generic over adapters.
 pub struct App<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> {
     pub all_skills: Vec<Skill>,
@@ -260,6 +285,8 @@ pub struct App<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> {
     pub ssh_state: SshState,
     pub bundle_store: Box<dyn BundleStore>,
     pub bundle_state: BundleState,
+    pub sync_store: Box<dyn SkillSync>,
+    pub sync_state: SyncState,
     pub should_quit: bool,
     pub import_chain_result: Option<ImportChainResult>,
     pub profile_export_message: Option<String>,
@@ -281,6 +308,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
         signature_verifier: Box<dyn SignatureVerifier>,
         ssh_connector: Box<dyn SshConnector>,
         bundle_store: Box<dyn BundleStore>,
+        sync_store: Box<dyn SkillSync>,
     ) -> Self {
         let profiles = profile_store.list().unwrap_or_default();
         let budget = calculate_budget(&all_skills);
@@ -320,6 +348,8 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             ssh_state: SshState::default(),
             bundle_store,
             bundle_state: BundleState::default(),
+            sync_store,
+            sync_state: SyncState::default(),
             should_quit: false,
             import_chain_result: None,
             profile_export_message: None,
@@ -398,6 +428,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 View::ImportChain => self.handle_import_chain_key(key),
                 View::SshRemote => self.handle_ssh_key(key),
                 View::Bundles => self.handle_bundles_key(key),
+                View::Sync => self.handle_sync_key(key),
             },
             AppEvent::Resize => {}
         }
@@ -653,9 +684,8 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 self.view = View::Audit;
             }
             KeyCode::Char('S') => {
-                self.settings = self.settings_store.read().ok();
-                self.settings_state = SettingsState::default();
-                self.view = View::Settings;
+                self.refresh_sync_state();
+                self.view = View::Sync;
             }
             KeyCode::Char('R') => {
                 self.ssh_state = SshState::default();
@@ -1156,6 +1186,153 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
         }
     }
 
+    fn refresh_sync_state(&mut self) {
+        let status = self.sync_store.status().ok();
+        let snapshots = self.sync_store.list_snapshots().ok().unwrap_or_default();
+        self.sync_state = SyncState {
+            status,
+            snapshots,
+            ..SyncState::default()
+        };
+    }
+
+    fn handle_sync_key(&mut self, key: crossterm::event::KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                if self.sync_state.creating_snapshot {
+                    self.sync_state.creating_snapshot = false;
+                    self.sync_state.snapshot_message.clear();
+                } else if self.sync_state.configuring_remote {
+                    self.sync_state.configuring_remote = false;
+                    self.sync_state.remote_input.clear();
+                } else {
+                    self.view = View::List;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') if key.modifiers == KeyModifiers::NONE => {
+                let len = self.sync_state.snapshots.len();
+                if len > 0 && self.sync_state.selected_index + 1 < len {
+                    self.sync_state.selected_index += 1;
+                }
+            }
+            KeyCode::Up | KeyCode::Char('k') if key.modifiers == KeyModifiers::NONE => {
+                self.sync_state.selected_index = self.sync_state.selected_index.saturating_sub(1);
+            }
+            KeyCode::Enter if self.sync_state.creating_snapshot => {
+                let msg = self.sync_state.snapshot_message.clone();
+                match self.sync_store.snapshot(&msg) {
+                    Ok(hash) => {
+                        self.sync_state.message = Some(format!("Snapshot created: {hash}"));
+                        self.sync_state.snapshot_message.clear();
+                        self.sync_state.creating_snapshot = false;
+                        self.refresh_sync_state();
+                    }
+                    Err(e) => {
+                        self.sync_state.message = Some(format!("Error: {e}"));
+                    }
+                }
+            }
+            KeyCode::Enter if self.sync_state.configuring_remote => {
+                let input = self.sync_state.remote_input.clone();
+                let parts: Vec<&str> = input.splitn(2, ' ').collect();
+                match parts.as_slice() {
+                    [name, url] => match self.sync_store.add_remote(name, url) {
+                        Ok(()) => {
+                            self.sync_state.message = Some(format!("Remote '{name}' configured"));
+                            self.sync_state.remote_input.clear();
+                            self.sync_state.configuring_remote = false;
+                        }
+                        Err(e) => {
+                            self.sync_state.message = Some(format!("Error: {e}"));
+                        }
+                    },
+                    _ => {
+                        self.sync_state.message = Some("Usage: <name> <url>".into());
+                    }
+                }
+            }
+            KeyCode::Enter => {
+                // No snapshot selected: init or snapshot creation, depending on status.
+                match &self.sync_state.status {
+                    Some(SyncStatus::Uninitialized) => match self.sync_store.init() {
+                        Ok(()) => {
+                            self.sync_state.message = Some("Repository initialized".into());
+                            self.refresh_sync_state();
+                        }
+                        Err(e) => {
+                            self.sync_state.message = Some(format!("Error: {e}"));
+                        }
+                    },
+                    _ => {
+                        self.sync_state.creating_snapshot = true;
+                    }
+                }
+            }
+            KeyCode::Char('r') if key.modifiers == KeyModifiers::NONE => {
+                // Restore selected snapshot.
+                if let Some(snapshot) = self
+                    .sync_state
+                    .snapshots
+                    .get(self.sync_state.selected_index)
+                {
+                    match self.sync_store.restore(&snapshot.id) {
+                        Ok(()) => {
+                            self.sync_state.message = Some(format!(
+                                "Restored to {}",
+                                &snapshot.id[..7.min(snapshot.id.len())]
+                            ));
+                            self.needs_refresh = true;
+                            self.refresh_sync_state();
+                        }
+                        Err(e) => {
+                            self.sync_state.message = Some(format!("Error: {e}"));
+                        }
+                    }
+                }
+            }
+            KeyCode::Char('R') => {
+                self.sync_state.configuring_remote = true;
+                self.sync_state.remote_input.clear();
+            }
+            KeyCode::Char('p') if key.modifiers == KeyModifiers::NONE => {
+                // Push to remote.
+                let branch = if self.sync_state.branch.is_empty() {
+                    "main"
+                } else {
+                    &self.sync_state.branch
+                };
+                match self.sync_store.push("origin", branch) {
+                    Ok(()) => {
+                        self.sync_state.message = Some("Pushed to origin".into());
+                        self.refresh_sync_state();
+                    }
+                    Err(e) => {
+                        self.sync_state.message = Some(format!("Push failed: {e}"));
+                    }
+                }
+            }
+            KeyCode::Char('P') => {
+                // Pull from remote.
+                let branch = if self.sync_state.branch.is_empty() {
+                    "main"
+                } else {
+                    &self.sync_state.branch
+                };
+                match self.sync_store.pull("origin", branch) {
+                    Ok(()) => {
+                        self.sync_state.message = Some("Pulled from origin".into());
+                        self.needs_refresh = true;
+                        self.refresh_sync_state();
+                    }
+                    Err(e) => {
+                        self.sync_state.message = Some(format!("Pull failed: {e}"));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn handle_ssh_key(&mut self, key: crossterm::event::KeyEvent) {
         match key.code {
             KeyCode::Esc => {
@@ -1550,6 +1727,39 @@ mod tests {
         }
     }
 
+    struct FakeSkillSync;
+    impl ai_skill_core::SkillSync for FakeSkillSync {
+        fn is_initialized(&self) -> Result<bool, Box<dyn std::error::Error>> {
+            Ok(false)
+        }
+        fn init(&self) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
+        }
+        fn snapshot(&self, _: &str) -> Result<String, Box<dyn std::error::Error>> {
+            Ok("0000000".into())
+        }
+        fn list_snapshots(
+            &self,
+        ) -> Result<Vec<ai_skill_core::Snapshot>, Box<dyn std::error::Error>> {
+            Ok(vec![])
+        }
+        fn restore(&self, _: &str) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
+        }
+        fn status(&self) -> Result<ai_skill_core::SyncStatus, Box<dyn std::error::Error>> {
+            Ok(ai_skill_core::SyncStatus::Uninitialized)
+        }
+        fn push(&self, _: &str, _: &str) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
+        }
+        fn pull(&self, _: &str, _: &str) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
+        }
+        fn add_remote(&self, _: &str, _: &str) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
+        }
+    }
+
     fn make_app(skills: Vec<Skill>) -> TestApp {
         App::new(
             skills,
@@ -1564,6 +1774,7 @@ mod tests {
             Box::new(ai_skill_core::NoopSignatureVerifier),
             Box::new(ai_skill_core::NoopSshConnector),
             Box::new(FakeBundleStore),
+            Box::new(FakeSkillSync),
         )
     }
 
@@ -1771,6 +1982,7 @@ mod tests {
             Box::new(ai_skill_core::NoopSignatureVerifier),
             Box::new(ai_skill_core::NoopSshConnector),
             Box::new(FakeBundleStore),
+            Box::new(FakeSkillSync),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('o')));
@@ -1793,6 +2005,7 @@ mod tests {
             Box::new(ai_skill_core::NoopSignatureVerifier),
             Box::new(ai_skill_core::NoopSshConnector),
             Box::new(FakeBundleStore),
+            Box::new(FakeSkillSync),
         );
         app.view = View::Search;
         app.search_state.query = "om".to_string();
@@ -1815,6 +2028,7 @@ mod tests {
             Box::new(ai_skill_core::NoopSignatureVerifier),
             Box::new(ai_skill_core::NoopSshConnector),
             Box::new(FakeBundleStore),
+            Box::new(FakeSkillSync),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('x')));
@@ -1848,6 +2062,7 @@ mod tests {
             Box::new(ai_skill_core::NoopSignatureVerifier),
             Box::new(ai_skill_core::NoopSshConnector),
             Box::new(FakeBundleStore),
+            Box::new(FakeSkillSync),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('x')));
@@ -2073,6 +2288,7 @@ mod tests {
             Box::new(ai_skill_core::NoopSignatureVerifier),
             Box::new(ai_skill_core::NoopSshConnector),
             Box::new(FakeBundleStore),
+            Box::new(FakeSkillSync),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('o'))); // search to get results

@@ -41,7 +41,7 @@ Legenda: **[MUST]** ataca dor top da pesquisa · **[DEP]** tem dependência bloq
 
 - [x] **Gerenciamento remoto via SSH** **[R]**
       Port `SshConnector` definido em `core`, adapter `SshCommandConnector` (shell-out para `ssh`), `NoopSshConnector`. TUI: `View::SshRemote`, tecla `R` no list view, `ssh_panel.rs` com lista de hosts + detalhes + skills remotas. Host padrão `local` (127.0.0.1) pré-configurado.
-- [ ] **Biblioteca git-backed + sync multi-device**
+- [x] **Biblioteca git-backed + sync multi-device**
       Versionar a biblioteca de skills num repo git, com snapshots restauráveis e sync entre máquinas.
 - [x] **Export/share de profile**
       Exportar profile como YAML pra commitar em dotfiles. Tecla `e` no profiles view salva `<name>.skill-profile.yaml` no diretório atual. Método `export` adicionado ao trait `ProfileStore`.

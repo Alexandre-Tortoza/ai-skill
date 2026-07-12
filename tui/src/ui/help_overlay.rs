@@ -13,7 +13,7 @@ k / ↑       move up
 Tab         cycle scope filter (all → global → project)
 Enter       open skill detail
 s           open catalog search
-S           project settings (auto-trigger)
+S           git sync (snapshots / push / pull)
 R           SSH remote management
 b           bundles (predefined skill sets)
 p           profiles / presets

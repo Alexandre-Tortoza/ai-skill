@@ -14,6 +14,7 @@ pub mod fs_skill_repository;
 pub mod fs_toggler;
 pub mod fs_watcher;
 pub mod git_drift_checker;
+pub mod git_skill_sync;
 pub mod import_chain;
 pub mod npx_catalog_gateway;
 pub mod ssh_connector;
@@ -39,6 +40,8 @@ pub use fs_toggler::FsToggler;
 pub use fs_watcher::FsWatcher;
 /// Adapter that checks Git drift by comparing local HEAD with `@{u}`.
 pub use git_drift_checker::GitDriftChecker;
+/// Adapter that manages a git repository for skill sync.
+pub use git_skill_sync::{GitSkillSync, GitSyncError};
 /// Adapter that shells out to `npx skills add|remove|update`.
 /// Adapter that traces script import chains for security analysis.
 pub use import_chain::{ImportChainResult, trace_import_chain};
