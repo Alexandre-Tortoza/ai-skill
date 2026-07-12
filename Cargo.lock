@@ -22,6 +22,8 @@ version = "0.1.0"
 dependencies = [
  "ai-skill-core",
  "notify",
+ "serde",
+ "serde_json",
  "serde_norway",
  "tempfile",
  "thiserror",

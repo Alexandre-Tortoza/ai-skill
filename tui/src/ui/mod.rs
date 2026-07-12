@@ -13,6 +13,7 @@ pub mod profiles_panel;
 pub mod resize_panel;
 pub mod scan_report;
 pub mod search_panel;
+pub mod settings_panel;
 pub mod skills_panel;
 pub mod status_bar;
 pub mod style_helpers;

@@ -16,6 +16,7 @@ pub mod mode;
 pub mod profile;
 pub mod repository;
 pub mod security_scan;
+pub mod settings;
 pub mod skill;
 pub mod validation;
 
@@ -41,7 +42,9 @@ pub use installer::{SkillInstaller, SkillToggler};
 /// Skill operating mode.
 pub use mode::SkillMode;
 /// Profile model, diff algorithm, and persistence port.
-pub use profile::{Profile, ProfileOp, ProfileStore, diff_profile};
+pub use profile::{Phase, Profile, ProfileOp, ProfileStore, diff_profile};
+/// Settings model and persistence port for `.claude/settings.json`.
+pub use settings::{ProjectSettings, SettingsStore, SkillOverride};
 /// Port for listing installed skills.
 pub use repository::SkillRepository;
 /// Heuristic content scanner for dangerous patterns.

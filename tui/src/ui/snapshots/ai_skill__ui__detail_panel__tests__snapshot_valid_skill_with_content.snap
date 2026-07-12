@@ -12,11 +12,11 @@ Buffer {
         "│validation: valid                                         │",
         "│mode:       active                                        │",
         "│budget:     40 chars  ~10 tok                             │",
+        "│auto-trig:  (unknown)  [o] toggle                         │",
         "│                                                          │",
         "│# My Skill                                                │",
         "│                                                          │",
         "│Does something useful.                                    │",
-        "│                                                          │",
         "│                                                          │",
         "│                                                          │",
         "└──────────────────────────────────────────────────────────┘",
@@ -35,5 +35,8 @@ Buffer {
         x: 13, y: 5, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 1, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
         x: 13, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 1, y: 7, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 13, y: 7, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
+        x: 22, y: 7, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
     ]
 }

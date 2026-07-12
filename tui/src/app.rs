@@ -1,14 +1,15 @@
 //! Application state, view transitions, and event handling.
 
 use ai_skill_core::{
-    AnyCatalogGateway, CatalogEntry, ContextBudget, Profile, ProfileOp, ProfileStore, ScanFinding,
-    Scope, Skill, SkillCreator, SkillInstaller, SkillMode, SkillToggler, SkillWriter,
-    calculate_budget, scan_skill,
+    AnyCatalogGateway, CatalogEntry, ContextBudget, Phase, Profile, ProfileOp, ProfileStore,
+    ProjectSettings, ScanFinding, Scope, SettingsStore, Skill, SkillCreator, SkillInstaller,
+    SkillMode, SkillToggler, SkillWriter, calculate_budget, scan_skill,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::path::PathBuf;
 
 use crate::event::{AppEvent, is_quit};
+use crate::ui::settings_panel::SettingsState;
 
 /// The active screen (or overlay) in the TUI.
 #[derive(Debug, Clone, PartialEq)]
@@ -25,6 +26,7 @@ pub enum View {
     Editor,
     Audit,
     Budget,
+    Settings,
 }
 
 /// Steps in the create-skill wizard.
@@ -212,6 +214,9 @@ pub struct App<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> {
     pub create_wizard_state: CreateWizardState,
     pub editor_state: Option<EditorState>,
     pub budget: ContextBudget,
+    pub settings_store: Box<dyn SettingsStore>,
+    pub settings: Option<ProjectSettings>,
+    pub settings_state: SettingsState,
     pub should_quit: bool,
 }
 
@@ -224,6 +229,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
         profile_store: Box<dyn ProfileStore>,
         creator: Box<dyn SkillCreator>,
         writer: Box<dyn SkillWriter>,
+        settings_store: Box<dyn SettingsStore>,
     ) -> Self {
         let profiles = profile_store.list().unwrap_or_default();
         let budget = calculate_budget(&all_skills);
@@ -254,6 +260,9 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             writer,
             create_wizard_state: CreateWizardState::default(),
             editor_state: None,
+            settings_store,
+            settings: None,
+            settings_state: SettingsState::default(),
             should_quit: false,
         }
     }
@@ -326,6 +335,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 View::Editor => self.handle_editor_key(key),
                 View::Audit => self.handle_audit_key(key),
                 View::Budget => self.handle_audit_key(key),
+                View::Settings => self.handle_settings_key(key),
             },
             AppEvent::Resize => {}
         }
@@ -565,6 +575,15 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             KeyCode::Char('A') => {
                 self.view = View::Audit;
             }
+            KeyCode::Char('S') => {
+                self.settings = self.settings_store.read().ok();
+                self.settings_state = SettingsState::default();
+                self.view = View::Settings;
+            }
+            KeyCode::F(1) => self.activate_phase_preset(Phase::Init),
+            KeyCode::F(2) => self.activate_phase_preset(Phase::Dev),
+            KeyCode::F(3) => self.activate_phase_preset(Phase::Test),
+            KeyCode::F(4) => self.activate_phase_preset(Phase::Release),
             _ => {}
         }
     }
@@ -578,7 +597,38 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             KeyCode::Up | KeyCode::Char('k') if key.modifiers == KeyModifiers::NONE => {
                 self.detail_scroll = self.detail_scroll.saturating_sub(1);
             }
+            KeyCode::Char('o') if key.modifiers == KeyModifiers::NONE => {
+                if let Some(skill) = self.selected_skill().cloned() {
+                    self.toggle_skill_auto_trigger(&skill.name);
+                }
+            }
             _ => {}
+        }
+    }
+
+    fn toggle_skill_auto_trigger(&mut self, skill_name: &str) {
+        if self.settings.is_none() {
+            self.settings = self.settings_store.read().ok();
+        }
+        if let Some(ref mut settings) = self.settings {
+            let existing = settings
+                .skill_overrides
+                .iter_mut()
+                .find(|o| o.skill_name == skill_name);
+            match existing {
+                Some(override_) => {
+                    override_.auto_trigger = !override_.auto_trigger;
+                }
+                None => {
+                    settings.skill_overrides.push(
+                        ai_skill_core::SkillOverride {
+                            skill_name: skill_name.to_string(),
+                            auto_trigger: false,
+                        },
+                    );
+                }
+            }
+            let _ = self.settings_store.write(settings);
         }
     }
 
@@ -744,7 +794,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                         .filter(|s| s.mode.is_enabled())
                         .map(|s| s.name.clone())
                         .collect();
-                    let profile = Profile { name, skill_names };
+                    let profile = Profile { name, skill_names, phase: None };
                     let _ = self.profile_store.save(&profile);
                     let profiles = self.profile_store.list().unwrap_or_default();
                     self.profile_state.profiles = profiles;
@@ -917,6 +967,72 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
     fn handle_audit_key(&mut self, key: crossterm::event::KeyEvent) {
         if key.code == KeyCode::Esc {
             self.view = View::List;
+        }
+    }
+
+    fn activate_phase_preset(&mut self, phase: Phase) {
+        let profiles = self.profile_store.list().unwrap_or_default();
+        if let Some(profile) = profiles.into_iter().find(|p| p.phase == Some(phase.clone())) {
+            let ops = ai_skill_core::diff_profile(&self.all_skills, &profile);
+            if !ops.is_empty() {
+                let name = profile.name.clone();
+                self.pending_action = Some(AppAction::ActivateProfile { name, ops });
+                self.view_before_confirm = View::List;
+                self.view = View::Confirm;
+            }
+        }
+    }
+
+    fn handle_settings_key(&mut self, key: crossterm::event::KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                if self.settings_state.dirty {
+                    if let Some(ref settings) = self.settings {
+                        let _ = self.settings_store.write(settings);
+                    }
+                }
+                self.settings = None;
+                self.view = View::List;
+            }
+            KeyCode::Char('t') if key.modifiers == KeyModifiers::NONE => {
+                if let Some(ref mut settings) = self.settings {
+                    settings.auto_trigger = !settings.auto_trigger;
+                    self.settings_state.dirty = true;
+                }
+            }
+            KeyCode::Char('j') | KeyCode::Down if key.modifiers == KeyModifiers::NONE => {
+                if let Some(ref settings) = self.settings {
+                    if self.settings_state.selected_override_index + 1 < settings.skill_overrides.len() {
+                        self.settings_state.selected_override_index += 1;
+                    }
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up if key.modifiers == KeyModifiers::NONE => {
+                self.settings_state.selected_override_index =
+                    self.settings_state.selected_override_index.saturating_sub(1);
+            }
+            KeyCode::Char('o') if key.modifiers == KeyModifiers::NONE => {
+                if let Some(ref mut settings) = self.settings {
+                    let idx = self.settings_state.selected_override_index;
+                    if idx < settings.skill_overrides.len() {
+                        settings.skill_overrides[idx].auto_trigger =
+                            !settings.skill_overrides[idx].auto_trigger;
+                        self.settings_state.dirty = true;
+                    }
+                }
+            }
+            KeyCode::Char('d') if key.modifiers == KeyModifiers::NONE => {
+                if let Some(ref mut settings) = self.settings {
+                    let idx = self.settings_state.selected_override_index;
+                    if idx < settings.skill_overrides.len() {
+                        settings.skill_overrides.remove(idx);
+                        self.settings_state.selected_override_index =
+                            self.settings_state.selected_override_index.saturating_sub(1);
+                        self.settings_state.dirty = true;
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
@@ -1108,6 +1224,21 @@ mod tests {
     }
 
     #[derive(Default)]
+    struct FakeSettingsStore;
+
+    impl SettingsStore for FakeSettingsStore {
+        fn read(&self) -> Result<ProjectSettings, Box<dyn std::error::Error>> {
+            Ok(ProjectSettings::default())
+        }
+        fn write(
+            &self,
+            _settings: &ProjectSettings,
+        ) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
+        }
+    }
+
+    #[derive(Default)]
     struct FakeCreator {
         calls: RefCell<Vec<String>>,
     }
@@ -1153,6 +1284,7 @@ mod tests {
             Box::new(FakeProfileStore::default()),
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
+            Box::new(FakeSettingsStore),
         )
     }
 
@@ -1355,6 +1487,7 @@ mod tests {
             Box::new(FakeProfileStore::default()),
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
+            Box::new(FakeSettingsStore),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('o')));
@@ -1372,6 +1505,7 @@ mod tests {
             Box::new(FakeProfileStore::default()),
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
+            Box::new(FakeSettingsStore),
         );
         app.view = View::Search;
         app.search_state.query = "om".to_string();
@@ -1389,6 +1523,7 @@ mod tests {
             Box::new(FakeProfileStore::default()),
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
+            Box::new(FakeSettingsStore),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('x')));
@@ -1417,6 +1552,7 @@ mod tests {
             Box::new(FakeProfileStore::default()),
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
+            Box::new(FakeSettingsStore),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('x')));
@@ -1634,6 +1770,7 @@ mod tests {
             Box::new(FakeProfileStore::default()),
             Box::new(FakeCreator::default()),
             Box::new(FakeWriter::default()),
+            Box::new(FakeSettingsStore),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('o'))); // search to get results
@@ -1802,10 +1939,12 @@ mod tests {
             Profile {
                 name: "a".into(),
                 skill_names: vec![],
+                phase: None,
             },
             Profile {
                 name: "b".into(),
                 skill_names: vec![],
+                phase: None,
             },
         ];
         app.handle_event(key(KeyCode::Char('j')));
@@ -1821,6 +1960,7 @@ mod tests {
         app.profile_state.profiles = vec![Profile {
             name: "dev".into(),
             skill_names: vec!["alpha".into(), "new".into()],
+            phase: None,
         }];
         app.handle_event(key(KeyCode::Char('a')));
         assert_eq!(app.view, View::Confirm);
@@ -1865,6 +2005,7 @@ mod tests {
         let p = Profile {
             name: "dev".into(),
             skill_names: vec![],
+            phase: None,
         };
         app.profile_store.save(&p).unwrap();
         app.view = View::Profiles;

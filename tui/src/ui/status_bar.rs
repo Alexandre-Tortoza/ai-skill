@@ -16,7 +16,7 @@ pub fn render_status_bar(
 ) {
     let hints = match view {
         View::List => {
-            "j/k  d dis  e edit  n name  r rm  u up  a adopt  c new  A aud  B bud  s srch  ? quit"
+            "j/k  d  e  n  r  u  a  c  A aud  B bud  S set  s srch  F1-F4  ? quit"
         }
         View::Detail => "j/k scroll  Esc back  q quit",
         View::Search => "type search  j/k move  Enter install  Esc back",
@@ -29,6 +29,7 @@ pub fn render_status_bar(
         View::Editor => "Tab next field  Enter save  Esc cancel",
         View::Audit => "Esc back",
         View::Budget => "Esc back",
+        View::Settings => "t toggle  j/k move  o toggle override  d remove  Esc save & back",
     };
 
     let warning_span = match budget_warning {
