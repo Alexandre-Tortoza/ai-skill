@@ -26,6 +26,7 @@ pub mod signature;
 pub mod skill;
 pub mod ssh;
 pub mod sync;
+pub mod usage;
 pub mod validation;
 
 /// Report grouping skills by their health category.
@@ -82,5 +83,10 @@ pub use skill::{Agent, Scope, Skill};
 pub use ssh::{ConnectionStatus, NoopSshConnector, RemoteHost, RemoteSkill, SshConnector};
 /// Port and types for git-backed skill sync.
 pub use sync::{NoopSkillSync, SkillSync, Snapshot, SyncStatus};
+/// Skill usage analytics derived from local agent history.
+pub use usage::{
+    SkillUsageEvent, SkillUsageReader, SkillUsageRecord, UsageError, UsageReport,
+    build_usage_report,
+};
 /// Validation state enum describing a skill's health.
 pub use validation::ValidationState;

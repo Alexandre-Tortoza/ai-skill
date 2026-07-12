@@ -15,6 +15,35 @@ pub struct AuditReport<'a> {
 
 The report borrows from the skills slice — zero allocation for the classification itself.
 
+## Usage Analytics
+
+Skill usage is derived from local agent history (currently Claude Code transcripts
+under `~/.claude/projects/**/*.jsonl`). Invocations are detected heuristically by
+matching `Skill(\`name\`)` markers, and the transcript file's modification time is
+used as the observed usage timestamp.
+
+```rust
+pub trait SkillUsageReader {
+    fn read_events(&self) -> Result<Vec<SkillUsageEvent>, UsageError>;
+}
+
+pub fn build_usage_report(
+    events: &[SkillUsageEvent],
+    skill_names: &[String],
+    stale_after_days: u64,
+) -> UsageReport
+```
+
+`UsageReport` reports, for every known skill:
+
+| Field | Meaning |
+|---|---|
+| `dead` | Names with zero observed usage ("dead skills") |
+| `stale` | Names unused for longer than `stale_after_days` |
+| `stale_after_days` | Threshold used (default 30, configurable in `~/.config/ai-skill/config.json`) |
+
+The stale threshold is configured via `TuiConfig::stale_after_days`.
+
 ## Classification Logic
 
 ```rust

@@ -13,6 +13,7 @@ pub mod fs_settings_store;
 pub mod fs_skill_creator;
 pub mod fs_skill_repository;
 pub mod fs_toggler;
+pub mod fs_usage_history;
 pub mod fs_watcher;
 pub mod git_drift_checker;
 pub mod git_skill_sync;
@@ -39,6 +40,8 @@ pub use fs_skill_creator::{FsSkillCreator, FsSkillWriter};
 pub use fs_skill_repository::FsSkillRepository;
 /// Adapter that enables/disables skills by renaming directories (`.disabled` suffix).
 pub use fs_toggler::FsToggler;
+/// Adapter that scans local agent history for skill usage events.
+pub use fs_usage_history::{FsUsageHistoryReader, UsageHistoryError};
 /// Adapter that watches skill directories for changes using `notify`.
 pub use fs_watcher::FsWatcher;
 /// Adapter that checks Git drift by comparing local HEAD with `@{u}`.

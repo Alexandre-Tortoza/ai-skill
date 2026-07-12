@@ -17,6 +17,7 @@ Pure domain layer. No I/O dependencies.
 | `ProfileStore` | `list()`, `save()`, `delete()` | Persist named profiles |
 | `DriftChecker` | `check(path)` | Detect upstream drift |
 | `SkillCreator` | `create(name, agents, tags)` | Scaffold new skill |
+| `SkillUsageReader` | `read_events()` | Read local agent usage history |
 | `SkillWriter` | `write(path, content)` | Write SKILL.md to disk |
 
 ### Domain Structs
@@ -27,6 +28,8 @@ Pure domain layer. No I/O dependencies.
 | `CatalogEntry` | `name`, `description`, `url` |
 | `Profile` | `name`, `skill_names` |
 | `AuditReport` | `broken`, `duplicates`, `no_agents`, `update_available` |
+| `SkillUsageEvent` | `skill_name`, `timestamp` |
+| `UsageReport` | `records`, `dead`, `stale`, `stale_after_days` |
 | `SkillMetadata` | `name`, `agents`, `tags` |
 | `ScanFinding` | `severity`, `category`, `detail`, `line` |
 
@@ -47,6 +50,7 @@ Pure domain layer. No I/O dependencies.
 | Function | Signature |
 |---|---|
 | `audit_skills` | `(skills: &[Skill]) -> AuditReport` |
+| `build_usage_report` | `(events: &[SkillUsageEvent], skill_names: &[String], stale_after_days: u64) -> UsageReport` |
 | `detect_duplicates` | `(skills: &[Skill]) -> Vec<(usize, PathBuf)>` |
 | `diff_profile` | `(current: &[String], desired: &[String]) -> Vec<ProfileOp>` |
 | `parse_frontmatter` | `(content: &str) -> Result<SkillMetadata, ParseError>` |
@@ -72,6 +76,7 @@ I/O implementations of core ports.
 | `FsSkillCreator` | `SkillCreator` | Creates skill directories with scaffolds |
 | `FsSkillWriter` | `SkillWriter` | Writes SKILL.md files |
 | `FsWatcher` | (none) | Debounced filesystem watcher via `notify` |
+| `FsUsageHistoryReader` | `SkillUsageReader` | Scans Claude Code `.jsonl` transcripts for skill usage |
 
 ### Constructor Conventions
 

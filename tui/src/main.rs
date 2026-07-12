@@ -8,12 +8,14 @@ mod ui;
 use ai_skill_adapters::{
     CliInstaller, CompositeCatalogGateway, FsBundleStore, FsConfigStore, FsPluginDiscoverer,
     FsProfileStore, FsSettingsStore, FsSkillCreator, FsSkillRepository, FsSkillWriter, FsToggler,
-    FsWatcher, GitDriftChecker, GitSkillSync, NpxCatalogGateway, SshCommandConnector,
+    FsUsageHistoryReader, FsWatcher, GitDriftChecker, GitSkillSync, NpxCatalogGateway,
+    SshCommandConnector,
 };
 use ai_skill_core::{
     BudgetWarning, ConfigStore, DriftChecker, NoopExternalScanner, NoopSignatureVerifier,
     PluginMarketplaceDiscovery, RemoteHost, Scope, Skill, SkillMode, SkillRepository,
-    ValidationState, audit_skills, calculate_budget, classify_budget,
+    SkillUsageReader, ValidationState, audit_skills, build_usage_report, calculate_budget,
+    classify_budget,
 };
 
 use app::{App, View};
@@ -47,6 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config_store = config_store_from_env();
     let config = config_store.read().unwrap_or_default();
+    let stale_after_days = config.stale_after_days;
 
     let mut repo = FsSkillRepository::from_env()?;
     repo.add_custom_paths(config.custom_agent_paths.clone());
@@ -79,6 +82,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .as_ref()
         .map(|watcher| watcher.watched_paths() > 0)
         .unwrap_or(false);
+
+    let usage_reader = FsUsageHistoryReader::from_env();
+    let mut usage_report = build_usage_report(
+        &usage_reader.read_events().unwrap_or_default(),
+        &skill_names(&skills),
+        stale_after_days,
+    );
 
     let mut term = terminal::setup()?;
     let settings_store = FsSettingsStore::from_env()
@@ -203,7 +213,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 View::Audit => {
-                    ui::audit_panel::render_audit_panel(&app.all_skills, main_area, f);
+                    ui::audit_panel::render_audit_panel(
+                        &app.all_skills,
+                        &usage_report,
+                        main_area,
+                        f,
+                    );
                 }
                 View::Budget => {
                     ui::budget_panel::render_budget_panel(&app.budget, main_area, f);
@@ -305,6 +320,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     skills.extend(plugin_skill_objs);
                 }
                 app.budget = calculate_budget(&skills);
+                let names = skill_names(&skills);
+                usage_report = build_usage_report(
+                    &usage_reader.read_events().unwrap_or_default(),
+                    &names,
+                    stale_after_days,
+                );
                 app.all_skills = skills;
             }
             app.needs_refresh = false;
@@ -362,6 +383,11 @@ fn apply_drift(skills: &mut [Skill], drift_checker: &impl DriftChecker) {
     for skill in skills {
         skill.drift_state = drift_checker.check(&skill.path);
     }
+}
+
+/// Returns the distinct skill names from a slice of skills.
+fn skill_names(skills: &[Skill]) -> Vec<String> {
+    skills.iter().map(|s| s.name.clone()).collect()
 }
 
 /// Returns the user's home directory from `$HOME`.
@@ -452,6 +478,13 @@ fn print_json(command: JsonCommand, skills: &[Skill]) -> Result<(), Box<dyn std:
         JsonCommand::Audit => {
             let report = audit_skills(skills);
             let budget_warning = classify_budget(&report.budget);
+            let usage = build_usage_report(
+                &FsUsageHistoryReader::from_env()
+                    .read_events()
+                    .unwrap_or_default(),
+                &skill_names(skills),
+                stale_after_days_from_env(),
+            );
             let json = JsonAuditReport {
                 broken: report.broken,
                 duplicates: report.duplicates,
@@ -459,6 +492,9 @@ fn print_json(command: JsonCommand, skills: &[Skill]) -> Result<(), Box<dyn std:
                 update_available: report.update_available,
                 budget: report.budget,
                 budget_warning,
+                usage_dead: usage.dead,
+                usage_stale: usage.stale,
+                stale_after_days: usage.stale_after_days,
             };
             serde_json::to_writer_pretty(std::io::stdout(), &json)?;
         }
@@ -477,6 +513,13 @@ fn print_markdown(command: MarkdownCommand, skills: &[Skill]) {
 fn render_audit_markdown(skills: &[Skill]) -> String {
     let report = audit_skills(skills);
     let warning = classify_budget(&report.budget);
+    let usage = build_usage_report(
+        &FsUsageHistoryReader::from_env()
+            .read_events()
+            .unwrap_or_default(),
+        &skill_names(skills),
+        stale_after_days_from_env(),
+    );
     let mut out = String::new();
 
     out.push_str("# ai-skill Health Report\n\n");
@@ -490,6 +533,12 @@ fn render_audit_markdown(skills: &[Skill]) -> String {
     out.push_str(&format!(
         "| Updates available | {} |\n",
         report.update_available.len()
+    ));
+    out.push_str(&format!("| Dead (never used) | {} |\n", usage.dead.len()));
+    out.push_str(&format!(
+        "| Stale (> {}d) | {} |\n",
+        usage.stale_after_days,
+        usage.stale.len()
     ));
 
     out.push_str("\n## Context Budget\n\n");
@@ -506,6 +555,12 @@ fn render_audit_markdown(skills: &[Skill]) -> String {
     append_skill_section(&mut out, "Duplicates", &report.duplicates);
     append_skill_section(&mut out, "No Agents", &report.no_agents);
     append_skill_section(&mut out, "Updates Available", &report.update_available);
+    append_name_section(&mut out, "Dead (never used)", &usage.dead);
+    append_name_section(
+        &mut out,
+        &format!("Stale (unused > {}d)", usage.stale_after_days),
+        &usage.stale,
+    );
 
     out
 }
@@ -551,6 +606,26 @@ fn escape_markdown_cell(value: &str) -> String {
     value.replace('|', "\\|").replace('\n', " ")
 }
 
+/// Appends a simple bullet list of skill names under a heading.
+fn append_name_section(out: &mut String, title: &str, names: &[String]) {
+    out.push_str(&format!("\n## {title}\n\n"));
+    if names.is_empty() {
+        out.push_str("No findings.\n");
+        return;
+    }
+    for name in names {
+        out.push_str(&format!("- {}\n", escape_markdown_cell(name)));
+    }
+}
+
+/// Reads the stale threshold from the user config, defaulting to 30 days.
+fn stale_after_days_from_env() -> u64 {
+    config_store_from_env()
+        .read()
+        .map(|c| c.stale_after_days)
+        .unwrap_or_else(|_| ai_skill_core::config::default_stale_after_days())
+}
+
 #[derive(Serialize)]
 struct JsonAuditReport<'a> {
     broken: Vec<&'a Skill>,
@@ -559,6 +634,9 @@ struct JsonAuditReport<'a> {
     update_available: Vec<&'a Skill>,
     budget: ai_skill_core::ContextBudget,
     budget_warning: BudgetWarning,
+    usage_dead: Vec<String>,
+    usage_stale: Vec<String>,
+    stale_after_days: u64,
 }
 
 /// Returns the version string (`ai-skill X.Y.Z`).
@@ -653,6 +731,8 @@ mod cli_tests {
         assert!(report.contains("broken"));
         assert!(report.contains("## No Agents"));
         assert!(report.contains("lonely"));
+        assert!(report.contains("## Dead (never used)"));
+        assert!(report.contains("## Stale (unused > "));
     }
 
     fn skill(name: &str, validation: ValidationState, agents: Vec<&str>) -> Skill {

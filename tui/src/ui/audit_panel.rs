@@ -1,6 +1,6 @@
 //! Panel that renders an audit report broken into health categories.
 
-use ai_skill_core::{Skill, audit_skills};
+use ai_skill_core::{Skill, UsageReport, audit_skills};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -11,23 +11,34 @@ use ratatui::{
 
 use super::style_helpers::fg;
 
-/// Renders the audit report grouped by broken, duplicate, no-agents, and update-available.
-pub fn render_audit_panel(skills: &[Skill], area: Rect, frame: &mut Frame) {
+/// Renders the audit report grouped by health category, including usage.
+pub fn render_audit_panel(skills: &[Skill], usage: &UsageReport, area: Rect, frame: &mut Frame) {
     let report = audit_skills(skills);
 
-    let chunks = Layout::vertical([Constraint::Length(3), Constraint::Min(0)]).split(area);
+    let body = Layout::vertical([Constraint::Length(3), Constraint::Min(0)]).split(area);
 
     let summary = format!(
-        "broken: {}  duplicates: {}  no-agents: {}  updates: {}",
+        "broken: {}  duplicates: {}  no-agents: {}  updates: {}  dead: {}  stale: {}",
         report.broken.len(),
         report.duplicates.len(),
         report.no_agents.len(),
         report.update_available.len(),
+        usage.dead.len(),
+        usage.stale.len(),
     );
     let header = Paragraph::new(summary)
         .style(Style::default().add_modifier(Modifier::BOLD))
         .block(Block::default().borders(Borders::ALL).title("Audit Report"));
-    frame.render_widget(header, chunks[0]);
+    frame.render_widget(header, body[0]);
+
+    let show_usage = !usage.dead.is_empty() || !usage.stale.is_empty();
+    let (top, bottom) = if show_usage {
+        let split = Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(body[1]);
+        (split[0], Some(split[1]))
+    } else {
+        (body[1], None)
+    };
 
     let panels = Layout::horizontal([
         Constraint::Percentage(25),
@@ -35,7 +46,7 @@ pub fn render_audit_panel(skills: &[Skill], area: Rect, frame: &mut Frame) {
         Constraint::Percentage(25),
         Constraint::Percentage(25),
     ])
-    .split(chunks[1]);
+    .split(top);
 
     render_section("Broken", &report.broken, Color::Red, panels[0], frame);
     render_section(
@@ -59,6 +70,26 @@ pub fn render_audit_panel(skills: &[Skill], area: Rect, frame: &mut Frame) {
         panels[3],
         frame,
     );
+
+    if let Some(bottom) = bottom {
+        let usage_panels =
+            Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(bottom);
+        render_names(
+            &format!("Dead (>{}d)", usage.stale_after_days),
+            &usage.dead,
+            Color::Magenta,
+            usage_panels[0],
+            frame,
+        );
+        render_names(
+            &format!("Stale (>{}d)", usage.stale_after_days),
+            &usage.stale,
+            Color::Yellow,
+            usage_panels[1],
+            frame,
+        );
+    }
 }
 
 fn render_section(title: &str, skills: &[&Skill], color: Color, area: Rect, frame: &mut Frame) {
@@ -74,10 +105,23 @@ fn render_section(title: &str, skills: &[&Skill], color: Color, area: Rect, fram
     frame.render_widget(list, area);
 }
 
+fn render_names(title: &str, names: &[String], color: Color, area: Rect, frame: &mut Frame) {
+    let items: Vec<ListItem> = names
+        .iter()
+        .map(|n| ListItem::new(Line::from(Span::styled(n.clone(), fg(color)))))
+        .collect();
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(format!("{title} ({})", names.len())),
+    );
+    frame.render_widget(list, area);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ai_skill_core::{DriftState, Scope, Skill, SkillMode, ValidationState};
+    use ai_skill_core::{DriftState, Scope, Skill, SkillMode, UsageReport, ValidationState};
     use ratatui::{Terminal, backend::TestBackend};
     use std::path::PathBuf;
 
@@ -97,10 +141,14 @@ mod tests {
     }
 
     fn render(skills: &[Skill]) -> String {
+        render_with_usage(skills, &UsageReport::default())
+    }
+
+    fn render_with_usage(skills: &[Skill], usage: &UsageReport) -> String {
         let backend = TestBackend::new(80, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_audit_panel(skills, f.area(), f))
+            .draw(|f| render_audit_panel(skills, usage, f.area(), f))
             .unwrap();
         terminal
             .backend()
@@ -145,8 +193,45 @@ mod tests {
         let backend = TestBackend::new(80, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_audit_panel(&skills, f.area(), f))
+            .draw(|f| render_audit_panel(&skills, &UsageReport::default(), f.area(), f))
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
+    }
+
+    #[test]
+    fn summary_includes_dead_and_stale_counts() {
+        let skills = vec![make_skill("ok", ValidationState::Valid)];
+        let usage = UsageReport {
+            dead: vec!["ghost".to_string()],
+            stale: vec!["rusty".to_string()],
+            stale_after_days: 30,
+            ..Default::default()
+        };
+        let rendered = render_with_usage(&skills, &usage);
+        assert!(rendered.contains("dead: 1"));
+        assert!(rendered.contains("stale: 1"));
+    }
+
+    #[test]
+    fn dead_and_stale_sections_render_when_present() {
+        let skills = vec![make_skill("ok", ValidationState::Valid)];
+        let usage = UsageReport {
+            dead: vec!["ghost".to_string()],
+            stale: vec!["rusty".to_string()],
+            stale_after_days: 30,
+            ..Default::default()
+        };
+        let rendered = render_with_usage(&skills, &usage);
+        assert!(rendered.contains("Dead (>30d)"));
+        assert!(rendered.contains("Stale (>30d)"));
+        assert!(rendered.contains("ghost"));
+        assert!(rendered.contains("rusty"));
+    }
+
+    #[test]
+    fn no_usage_sections_when_empty() {
+        let skills = vec![make_skill("ok", ValidationState::Valid)];
+        let rendered = render(&skills);
+        assert!(!rendered.contains("Dead"));
     }
 }

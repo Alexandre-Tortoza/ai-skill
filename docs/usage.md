@@ -36,7 +36,22 @@ ai-skill --json audit > ai-skill-audit.json
 ai-skill --markdown audit > ai-skill-audit.md
 ```
 
-The report includes broken skills, duplicate names, skills without agent assignments, available updates and context budget usage.
+The report includes broken skills, duplicate names, skills without agent assignments, available updates, context budget usage and usage analytics (dead/stale skills).
+
+### Usage Analytics (dead & stale)
+
+`ai-skill` derives usage from local agent history (currently Claude Code transcripts in `~/.claude/projects/**/*.jsonl`). It detects skill invocations heuristically and classifies each installed skill as:
+
+- **Dead** — never observed being used.
+- **Stale** — not used for longer than the configured threshold (default **30 days**).
+
+The threshold is set via `stale_after_days` in `~/.config/ai-skill/config.json`:
+
+```json
+{ "stale_after_days": 30 }
+```
+
+The audit panel (key `a`) shows `dead: N` and `stale: N` in its summary, with dedicated **Dead** and **Stale** sections when any are found. The same data is included in the exported `--json audit` and `--markdown audit` reports as `usage_dead`, `usage_stale` and `stale_after_days`.
 
 ## Views (Modes)
 

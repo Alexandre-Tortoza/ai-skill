@@ -337,6 +337,7 @@ mod tests {
             theme: Some([("primary".into(), "blue".into())].into_iter().collect()),
             keymap: [("quit".into(), "q".into())].into_iter().collect(),
             proxy: Some("http://proxy:8080".into()),
+            stale_after_days: 30,
         };
         let rendered = render_config(&config, &ConfigState::default());
         assert!(rendered.contains("cursor"));

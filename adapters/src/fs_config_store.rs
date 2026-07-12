@@ -30,6 +30,8 @@ struct RawConfig {
     keymap: std::collections::HashMap<String, String>,
     #[serde(default)]
     proxy: Option<String>,
+    #[serde(default = "ai_skill_core::config::default_stale_after_days")]
+    stale_after_days: u64,
 }
 
 impl From<RawConfig> for TuiConfig {
@@ -39,6 +41,7 @@ impl From<RawConfig> for TuiConfig {
             theme: r.theme,
             keymap: r.keymap,
             proxy: r.proxy,
+            stale_after_days: r.stale_after_days,
         }
     }
 }
@@ -50,6 +53,7 @@ impl From<TuiConfig> for RawConfig {
             theme: c.theme,
             keymap: c.keymap,
             proxy: c.proxy,
+            stale_after_days: c.stale_after_days,
         }
     }
 }
@@ -124,6 +128,7 @@ mod tests {
             theme: Some([("primary".into(), "blue".into())].into_iter().collect()),
             keymap: [("quit".into(), "q".into())].into_iter().collect(),
             proxy: Some("http://proxy:8080".into()),
+            stale_after_days: 30,
         };
         store.write(&config).unwrap();
         let read_back = store.read().unwrap();

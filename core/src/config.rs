@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TuiConfig {
     #[serde(default)]
     pub custom_agent_paths: HashMap<String, PathBuf>,
@@ -13,6 +13,26 @@ pub struct TuiConfig {
     pub keymap: HashMap<String, String>,
     #[serde(default)]
     pub proxy: Option<String>,
+    /// Days of inactivity after which a skill is reported as stale.
+    #[serde(default = "default_stale_after_days")]
+    pub stale_after_days: u64,
+}
+
+impl Default for TuiConfig {
+    fn default() -> Self {
+        Self {
+            custom_agent_paths: HashMap::new(),
+            theme: None,
+            keymap: HashMap::new(),
+            proxy: None,
+            stale_after_days: default_stale_after_days(),
+        }
+    }
+}
+
+/// Default stale threshold: 30 days without observed usage.
+pub fn default_stale_after_days() -> u64 {
+    30
 }
 
 pub trait ConfigStore {
