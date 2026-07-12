@@ -75,6 +75,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let skill_roots = vec![home_dir()?.join(".claude").join("skills")];
     let watcher = FsWatcher::new(&skill_roots).ok();
+    let hot_reload_active = watcher
+        .as_ref()
+        .map(|watcher| watcher.watched_paths() > 0)
+        .unwrap_or(false);
 
     let mut term = terminal::setup()?;
     let settings_store = FsSettingsStore::from_env()
@@ -256,7 +260,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             let warning = classify_budget(&app.budget);
-            ui::status_bar::render_status_bar(&app.view, status_area, f, Some(&warning));
+            ui::status_bar::render_status_bar(
+                &app.view,
+                status_area,
+                f,
+                Some(&warning),
+                hot_reload_active,
+            );
         })?;
 
         if watcher

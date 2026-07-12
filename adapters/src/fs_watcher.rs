@@ -12,6 +12,7 @@ pub struct FsWatcher {
     _watcher: RecommendedWatcher,
     /// Receiving end — a `()` is sent whenever a change is detected.
     pub rx: Receiver<()>,
+    watched_paths: usize,
 }
 
 impl FsWatcher {
@@ -21,9 +22,11 @@ impl FsWatcher {
         let (debounce_tx, rx) = mpsc::channel::<()>();
 
         let mut watcher = notify::recommended_watcher(event_tx)?;
+        let mut watched_paths = 0;
         for path in paths {
             if path.exists() {
                 watcher.watch(path, RecursiveMode::Recursive)?;
+                watched_paths += 1;
             }
         }
 
@@ -49,7 +52,13 @@ impl FsWatcher {
         Ok(Self {
             _watcher: watcher,
             rx,
+            watched_paths,
         })
+    }
+
+    /// Returns how many requested roots were present and are actively watched.
+    pub fn watched_paths(&self) -> usize {
+        self.watched_paths
     }
 }
 
@@ -82,5 +91,14 @@ mod tests {
     fn empty_paths_does_not_panic() {
         let watcher = FsWatcher::new(&[]);
         assert!(watcher.is_ok());
+    }
+
+    #[test]
+    fn watched_paths_counts_existing_roots_only() {
+        let dir = TempDir::new().unwrap();
+        let missing = dir.path().join("missing");
+        let watcher = FsWatcher::new(&[dir.path().to_path_buf(), missing]).unwrap();
+
+        assert_eq!(watcher.watched_paths(), 1);
     }
 }

@@ -17,6 +17,7 @@ pub fn render_status_bar(
     area: Rect,
     frame: &mut Frame,
     budget_warning: Option<&BudgetWarning>,
+    hot_reload_active: bool,
 ) {
     let hints = match view {
         View::List => "j/k  d  e  n  r  u  a  c  A aud  B bud  S set  s srch  F1-F4  ? quit",
@@ -58,10 +59,17 @@ pub fn render_status_bar(
         )),
     };
 
-    let content = match warning_span {
-        Some(span) => Line::from(vec![Span::raw(hints), span]),
-        None => Line::from(Span::raw(hints)),
-    };
+    let mut spans = vec![Span::raw(hints)];
+    if hot_reload_active {
+        spans.push(Span::styled(
+            "  reload:on",
+            Style::default().fg(Color::LightGreen),
+        ));
+    }
+    if let Some(span) = warning_span {
+        spans.push(span);
+    }
+    let content = Line::from(spans);
 
     let bar = Paragraph::new(content).style(fg_bg(Color::Black, Color::DarkGray));
     frame.render_widget(bar, area);
@@ -76,7 +84,7 @@ mod tests {
         let backend = TestBackend::new(84, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&view, f.area(), f, None))
+            .draw(|f| render_status_bar(&view, f.area(), f, None, false))
             .unwrap();
         terminal
             .backend()
@@ -92,7 +100,7 @@ mod tests {
         let backend = TestBackend::new(84, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&View::List, f.area(), f, None))
+            .draw(|f| render_status_bar(&View::List, f.area(), f, None, false))
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
     }
@@ -102,7 +110,7 @@ mod tests {
         let backend = TestBackend::new(84, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&View::Detail, f.area(), f, None))
+            .draw(|f| render_status_bar(&View::Detail, f.area(), f, None, false))
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
     }
@@ -138,6 +146,7 @@ mod tests {
                     f.area(),
                     f,
                     Some(&BudgetWarning::Approaching { pct: 85.0 }),
+                    false,
                 )
             })
             .unwrap();
@@ -160,11 +169,24 @@ mod tests {
                         pct: 120.0,
                         truncated_skills: 2,
                     }),
+                    false,
                 )
             })
             .unwrap();
         let buf = terminal.backend().buffer().clone();
         let text: String = buf.content().iter().map(|c| c.symbol()).collect();
         assert!(text.contains("120%"));
+    }
+
+    #[test]
+    fn hot_reload_active_shows_reload_indicator() {
+        let backend = TestBackend::new(90, 1);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_status_bar(&View::List, f.area(), f, None, true))
+            .unwrap();
+        let buf = terminal.backend().buffer().clone();
+        let text: String = buf.content().iter().map(|c| c.symbol()).collect();
+        assert!(text.contains("reload:on"));
     }
 }

@@ -73,6 +73,8 @@ Validation states are shown as colored badges:
 
 Drift indicators show whether a skill is up-to-date or has an upstream update available.
 
+If the status bar shows `reload:on`, `ai-skill` is watching an existing skill root and refreshes the inventory when files change. Claude Code 2.1+ reloads changed skills without restarting the agent; the TUI indicator confirms that `ai-skill` is tracking the same live filesystem changes.
+
 ### Detail View
 
 Shows full metadata and the rendered `SKILL.md` body for the selected skill.
