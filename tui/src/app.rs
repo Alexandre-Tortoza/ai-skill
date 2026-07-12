@@ -3,7 +3,8 @@
 use ai_skill_core::{
     AnyCatalogGateway, CatalogEntry, ContextBudget, LintWarning, Phase, Profile, ProfileOp,
     ProfileStore, ProjectSettings, ScanFinding, Scope, SettingsStore, Skill, SkillCreator,
-    SkillInstaller, SkillMode, SkillToggler, SkillWriter, calculate_budget, scan_skill,
+    SkillInstaller, SkillMode, SkillToggler, SkillWriter, calculate_budget, cross_reference,
+    scan_skill,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::path::PathBuf;
@@ -730,7 +731,8 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 if let Some(entry) = self.install_wizard_state.entry.clone() {
                     let scope = self.install_wizard_state.scope.clone();
                     let agents = self.install_wizard_state.selected_agents.clone();
-                    let findings = scan_skill(&entry.description);
+                    let mut findings = scan_skill(&entry.description);
+                    findings.extend(cross_reference(&entry, &self.catalog));
                     let action = AppAction::Install {
                         name: entry.name,
                         agents,

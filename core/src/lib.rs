@@ -51,7 +51,7 @@ pub use settings::{ProjectSettings, SettingsStore, SkillOverride};
 /// Port for listing installed skills.
 pub use repository::SkillRepository;
 /// Heuristic content scanner for dangerous patterns.
-pub use security_scan::{ScanCategory, ScanFinding, Severity, scan_skill};
+pub use security_scan::{ScanCategory, ScanFinding, Severity, cross_reference, scan_skill};
 /// Core skill model and scope enum.
 pub use skill::{Scope, Skill};
 /// Validation state enum describing a skill's health.
