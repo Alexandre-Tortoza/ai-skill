@@ -6,6 +6,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Skill, ValidationState};
 
+/// Development phase that a preset profile targets.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Phase {
+    Init,
+    Dev,
+    Test,
+    Release,
+}
+
 /// A named profile referencing a set of skills by name.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Profile {
@@ -13,6 +22,9 @@ pub struct Profile {
     pub name: String,
     /// Skill names that this profile should install.
     pub skill_names: Vec<String>,
+    /// Optional phase tag for preset profiles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<Phase>,
 }
 
 /// A single operation required to reconcile current state with a desired profile.
@@ -97,6 +109,7 @@ mod tests {
         Profile {
             name: name.to_string(),
             skill_names: skills.iter().map(|s| s.to_string()).collect(),
+            phase: None,
         }
     }
 

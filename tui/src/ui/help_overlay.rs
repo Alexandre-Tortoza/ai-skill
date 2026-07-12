@@ -13,10 +13,23 @@ k / ↑       move up
 Tab         cycle scope filter (all → global → project)
 Enter       open skill detail
 s           open catalog search
+S           project settings (auto-trigger)
+p           profiles / presets
+F1-F4       apply phase preset (init/dev/test/release)
 ?           show this help
 Esc         go back / close
 q           quit
-Ctrl-C      quit";
+Ctrl-C      quit
+
+--- in detail view ---
+o           toggle skill auto-trigger
+
+--- in settings view ---
+t           toggle global auto-trigger
+j/k         move in overrides list
+o           toggle override auto-trigger
+d           remove override
+Esc         save & back";
 
 /// Renders a centred overlay showing keyboard shortcuts.
 pub fn render_help_overlay(area: Rect, frame: &mut Frame) {

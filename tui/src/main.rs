@@ -6,10 +6,12 @@ mod terminal;
 mod ui;
 
 use ai_skill_adapters::{
-    CliInstaller, FsProfileStore, FsSkillCreator, FsSkillRepository, FsSkillWriter, FsToggler,
-    FsWatcher, GitDriftChecker, NpxCatalogGateway,
+    CliInstaller, FsProfileStore, FsSettingsStore, FsSkillCreator, FsSkillRepository,
+    FsSkillWriter, FsToggler, FsWatcher, GitDriftChecker, NpxCatalogGateway,
 };
-use ai_skill_core::{DriftChecker, Skill, SkillRepository, audit_skills};
+use ai_skill_core::{
+    DriftChecker, Skill, SkillRepository, audit_skills, calculate_budget, classify_budget,
+};
 use app::{App, View};
 use event::next_event;
 use ratatui::layout::{Constraint, Layout};
@@ -42,6 +44,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let watcher = FsWatcher::new(&skill_roots).ok();
 
     let mut term = terminal::setup()?;
+    let settings_store = FsSettingsStore::from_env().ok()
+        .map(|s| Box::new(s) as Box<dyn ai_skill_core::SettingsStore>)
+        .unwrap_or_else(|| {
+            let path = std::path::PathBuf::from(".claude/settings.json");
+            Box::new(FsSettingsStore::new(path)) as Box<dyn ai_skill_core::SettingsStore>
+        });
+
     let mut app = App::new(
         skills,
         NpxCatalogGateway,
@@ -50,6 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Box::new(FsProfileStore::from_env()?),
         Box::new(FsSkillCreator::from_env()?),
         Box::new(FsSkillWriter),
+        settings_store,
     );
 
     loop {
@@ -77,11 +87,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 View::Detail => {
                     if let Some(skill) = app.selected_skill() {
+                        let auto_trigger = app.settings.as_ref().map(|s| {
+                            s.skill_overrides
+                                .iter()
+                                .find(|o| o.skill_name == skill.name)
+                                .map(|o| o.auto_trigger)
+                                .unwrap_or(s.auto_trigger)
+                        });
                         ui::detail_panel::render_detail_panel(
                             skill,
                             app.detail_scroll,
                             main_area,
                             f,
+                            auto_trigger,
                         );
                     }
                 }
@@ -133,9 +151,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 View::Audit => {
                     ui::audit_panel::render_audit_panel(&app.all_skills, main_area, f);
                 }
+                View::Budget => {
+                    ui::budget_panel::render_budget_panel(&app.budget, main_area, f);
+                }
+                View::Settings => {
+                    if let Some(ref settings) = app.settings {
+                        ui::settings_panel::render_settings_panel(
+                            settings,
+                            &app.settings_state,
+                            main_area,
+                            f,
+                        );
+                    }
+                }
             }
 
-            ui::status_bar::render_status_bar(&app.view, status_area, f);
+            let warning = classify_budget(&app.budget);
+            ui::status_bar::render_status_bar(&app.view, status_area, f, Some(&warning));
         })?;
 
         if watcher
@@ -153,6 +185,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if app.needs_refresh {
             if let Ok(mut skills) = repo.list() {
                 apply_drift(&mut skills, &drift_checker);
+                app.budget = calculate_budget(&skills);
                 app.all_skills = skills;
             }
             app.needs_refresh = false;

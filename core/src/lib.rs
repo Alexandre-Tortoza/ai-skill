@@ -14,6 +14,7 @@ pub mod installer;
 pub mod profile;
 pub mod repository;
 pub mod security_scan;
+pub mod settings;
 pub mod skill;
 pub mod validation;
 
@@ -32,7 +33,9 @@ pub use frontmatter::{ParseError, SkillMetadata, extract_body, parse_frontmatter
 /// Ports for installing, removing, and updating skills via external tooling.
 pub use installer::{SkillInstaller, SkillToggler};
 /// Profile model, diff algorithm, and persistence port.
-pub use profile::{Profile, ProfileOp, ProfileStore, diff_profile};
+pub use profile::{Phase, Profile, ProfileOp, ProfileStore, diff_profile};
+/// Settings model and persistence port for `.claude/settings.json`.
+pub use settings::{ProjectSettings, SettingsStore, SkillOverride};
 /// Port for listing installed skills.
 pub use repository::SkillRepository;
 /// Heuristic content scanner for dangerous patterns.

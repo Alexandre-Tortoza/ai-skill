@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use ai_skill_core::{Profile, ProfileStore};
+use ai_skill_core::{Phase, Profile, ProfileStore};
 
 fn home_dir() -> Result<PathBuf, std::io::Error> {
     std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| {
@@ -39,6 +39,8 @@ impl FsProfileStore {
 impl ProfileStore for FsProfileStore {
     fn list(&self) -> Result<Vec<Profile>, Box<dyn std::error::Error>> {
         if !self.base_dir.exists() {
+            std::fs::create_dir_all(&self.base_dir)?;
+            self.seed_default_presets()?;
             return Ok(vec![]);
         }
         let mut profiles = Vec::new();
@@ -51,6 +53,9 @@ impl ProfileStore for FsProfileStore {
             let content = std::fs::read_to_string(&path)?;
             let profile: Profile = serde_norway::from_str(&content)?;
             profiles.push(profile);
+        }
+        if profiles.is_empty() {
+            self.seed_default_presets()?;
         }
         profiles.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(profiles)
@@ -72,6 +77,29 @@ impl ProfileStore for FsProfileStore {
     }
 }
 
+impl FsProfileStore {
+    fn seed_default_presets(&self) -> Result<(), Box<dyn std::error::Error>> {
+        for (name, phase) in [
+            ("init", Phase::Init),
+            ("dev", Phase::Dev),
+            ("test", Phase::Test),
+            ("release", Phase::Release),
+        ] {
+            let path = self.profile_path(name);
+            if !path.exists() {
+                let profile = Profile {
+                    name: name.to_string(),
+                    skill_names: vec![],
+                    phase: Some(phase),
+                };
+                let content = serde_norway::to_string(&profile)?;
+                std::fs::write(path, content)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,6 +116,7 @@ mod tests {
         Profile {
             name: name.to_string(),
             skill_names: skills.iter().map(|s| s.to_string()).collect(),
+            phase: None,
         }
     }
 
@@ -98,9 +127,17 @@ mod tests {
     }
 
     #[test]
-    fn list_on_nonexistent_dir_returns_empty() {
-        let store = FsProfileStore::new(PathBuf::from("/tmp/nonexistent_ai_skill_test_dir"));
-        assert!(store.list().unwrap().is_empty());
+    fn list_on_nonexistent_dir_creates_and_seeds() {
+        let dir = TempDir::new().unwrap();
+        let nonexistent = dir.path().join("nonexistent_subdir");
+        let store = FsProfileStore::new(nonexistent.clone());
+        let result = store.list().unwrap();
+        // Creates the directory and returns empty (seeding happens on next list)
+        assert!(nonexistent.exists());
+        assert!(result.is_empty());
+        // Second call should return the seeded presets
+        let second = store.list().unwrap();
+        assert_eq!(second.len(), 4);
     }
 
     #[test]

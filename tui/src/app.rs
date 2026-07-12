@@ -712,7 +712,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                         .filter(|s| s.validation == ValidationState::Valid)
                         .map(|s| s.name.clone())
                         .collect();
-                    let profile = Profile { name, skill_names };
+                    let profile = Profile { name, skill_names, phase: None };
                     let _ = self.profile_store.save(&profile);
                     let profiles = self.profile_store.list().unwrap_or_default();
                     self.profile_state.profiles = profiles;
@@ -1745,10 +1745,12 @@ mod tests {
             Profile {
                 name: "a".into(),
                 skill_names: vec![],
+                phase: None,
             },
             Profile {
                 name: "b".into(),
                 skill_names: vec![],
+                phase: None,
             },
         ];
         app.handle_event(key(KeyCode::Char('j')));
@@ -1764,6 +1766,7 @@ mod tests {
         app.profile_state.profiles = vec![Profile {
             name: "dev".into(),
             skill_names: vec!["alpha".into(), "new".into()],
+            phase: None,
         }];
         app.handle_event(key(KeyCode::Char('a')));
         assert_eq!(app.view, View::Confirm);
@@ -1808,6 +1811,7 @@ mod tests {
         let p = Profile {
             name: "dev".into(),
             skill_names: vec![],
+            phase: None,
         };
         app.profile_store.save(&p).unwrap();
         app.view = View::Profiles;

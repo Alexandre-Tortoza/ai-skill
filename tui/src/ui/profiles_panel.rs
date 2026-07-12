@@ -1,5 +1,6 @@
 //! Panel for viewing, creating, activating, and deleting profiles.
 
+use ai_skill_core::Phase;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -28,10 +29,19 @@ fn render_profile_list(state: &ProfileState, area: Rect, frame: &mut Frame) {
         .iter()
         .map(|p| {
             let count = p.skill_names.len();
-            ListItem::new(Line::from(vec![
-                Span::raw(p.name.clone()),
-                Span::styled(format!("  ({count} skills)"), fg(Color::DarkGray)),
-            ]))
+            let phase_badge = match &p.phase {
+                Some(Phase::Init) => Some(("[init]", Color::Cyan)),
+                Some(Phase::Dev) => Some(("[dev]", Color::Green)),
+                Some(Phase::Test) => Some(("[test]", Color::Yellow)),
+                Some(Phase::Release) => Some(("[release]", Color::Red)),
+                None => None,
+            };
+            let mut spans = vec![Span::raw(p.name.clone())];
+            if let Some((badge, color)) = phase_badge {
+                spans.push(Span::styled(format!(" {badge}"), fg(color).add_modifier(Modifier::BOLD)));
+            }
+            spans.push(Span::styled(format!("  ({count} skills)"), fg(Color::DarkGray)));
+            ListItem::new(Line::from(spans))
         })
         .collect();
 
@@ -112,10 +122,12 @@ mod tests {
             Profile {
                 name: "dev".into(),
                 skill_names: vec!["alpha".into(), "beta".into()],
+                phase: None,
             },
             Profile {
                 name: "ops".into(),
                 skill_names: vec!["deploy".into()],
+                phase: None,
             },
         ]);
         terminal
@@ -131,10 +143,12 @@ mod tests {
             Profile {
                 name: "dev".into(),
                 skill_names: vec!["alpha".into(), "beta".into()],
+                phase: None,
             },
             Profile {
                 name: "ops".into(),
                 skill_names: vec!["deploy".into()],
+                phase: None,
             },
         ]);
         terminal

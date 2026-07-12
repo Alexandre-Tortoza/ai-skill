@@ -1,25 +1,32 @@
 //! Panel showing full details of a single skill.
 
-use ai_skill_core::{DriftState, Scope, Skill};
+use ai_skill_core::{DriftState, Scope, Skill, estimate_skill_cost};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
-use super::style_helpers::{badge_for_validation, fg};
+use super::style_helpers::{badge_for_mode, badge_for_validation, fg};
 
 /// Renders the full detail view for a single skill (scrollable).
-pub fn render_detail_panel(skill: &Skill, scroll: u16, area: Rect, frame: &mut Frame) {
+/// `auto_trigger` is `None` (unknown), `Some(true)` (on), or `Some(false)` (off).
+pub fn render_detail_panel(
+    skill: &Skill,
+    scroll: u16,
+    area: Rect,
+    frame: &mut Frame,
+    auto_trigger: Option<bool>,
+) {
     let outer = Block::default()
         .borders(Borders::ALL)
         .title(skill.name.as_str());
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
 
-    let chunks = Layout::vertical([Constraint::Length(5), Constraint::Min(0)]).split(inner);
+    let chunks = Layout::vertical([Constraint::Length(8), Constraint::Min(0)]).split(inner);
 
     // Metadata section
     let scope_str = match skill.scope {
@@ -36,6 +43,21 @@ pub fn render_detail_panel(skill: &Skill, scroll: u16, area: Rect, frame: &mut F
         "valid"
     } else {
         val_badge
+    };
+
+    let (mode_badge, mode_color) = badge_for_mode(&skill.mode);
+    let mode_str = if mode_badge.is_empty() {
+        "active"
+    } else {
+        mode_badge
+    };
+
+    let cost = estimate_skill_cost(skill);
+
+    let auto_trigger_str = match auto_trigger {
+        Some(true) => "on",
+        Some(false) => "off",
+        None => "(unknown)",
     };
 
     let drift_line = match &skill.drift_state {
@@ -81,6 +103,38 @@ pub fn render_detail_panel(skill: &Skill, scroll: u16, area: Rect, frame: &mut F
             ),
             Span::styled(val_str, fg(val_color)),
         ]),
+        Line::from(vec![
+            Span::styled(
+                "mode:       ",
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(mode_str, fg(mode_color)),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                "budget:     ",
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(format!(
+                "{} chars  ~{} tok",
+                cost.char_count, cost.estimated_tokens
+            )),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                "auto-trig:  ",
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                auto_trigger_str,
+                match auto_trigger {
+                    Some(true) => fg(Color::Green),
+                    Some(false) => fg(Color::Red),
+                    None => fg(Color::DarkGray),
+                },
+            ),
+            Span::raw("  [o] toggle"),
+        ]),
         drift_line,
     ]);
     frame.render_widget(meta, chunks[0]);
@@ -99,6 +153,7 @@ pub fn render_detail_panel(skill: &Skill, scroll: u16, area: Rect, frame: &mut F
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ai_skill_core::SkillMode;
     use ai_skill_core::ValidationState;
     use ratatui::{Terminal, backend::TestBackend};
     use std::path::PathBuf;
@@ -111,6 +166,7 @@ mod tests {
             agents: vec!["claude".to_string()],
             tags: vec![],
             managed: false,
+            mode: SkillMode::Active,
             validation,
             manifest_content: content.map(str::to_string),
             drift_state: ai_skill_core::DriftState::default(),
@@ -121,7 +177,7 @@ mod tests {
         let backend = TestBackend::new(60, 15);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_detail_panel(skill, scroll, f.area(), f))
+            .draw(|f| render_detail_panel(skill, scroll, f.area(), f, None))
             .unwrap();
         terminal
             .backend()
@@ -142,7 +198,7 @@ mod tests {
         let backend = TestBackend::new(60, 15);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_detail_panel(&skill, 0, f.area(), f))
+            .draw(|f| render_detail_panel(&skill, 0, f.area(), f, None))
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
     }
