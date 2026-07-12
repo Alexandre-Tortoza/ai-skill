@@ -6,6 +6,7 @@
 pub mod cli_installer;
 pub mod composite_catalog_gateway;
 pub mod fs_bundle_store;
+pub mod fs_config_store;
 pub mod fs_plugin_discoverer;
 pub mod fs_profile_store;
 pub mod fs_settings_store;
@@ -24,6 +25,8 @@ pub use cli_installer::CliInstaller;
 pub use composite_catalog_gateway::CompositeCatalogGateway;
 /// Adapter that reads predefined skill bundles from YAML files.
 pub use fs_bundle_store::FsBundleStore;
+/// Adapter that reads/writes `~/.config/ai-skill/config.json`.
+pub use fs_config_store::FsConfigStore;
 /// Adapter that discovers skills from plugin marketplace manifests.
 pub use fs_plugin_discoverer::{FsPluginDiscoverer, PluginDiscovererError};
 /// Adapter that persists profiles as YAML files under `~/.claude/ai-skill/profiles/`.

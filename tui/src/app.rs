@@ -2,17 +2,17 @@
 
 use ai_skill_adapters::ImportChainResult;
 use ai_skill_core::{
-    AnyCatalogGateway, Bundle, BundleStore, CatalogEntry, ConnectionStatus, ContextBudget,
-    ExternalScanner, LintWarning, Phase, Profile, ProfileOp, ProfileStore, ProjectSettings,
-    RemoteHost, RemoteSkill, ScanFinding, Scope, SettingsStore, SignatureVerifier, Skill,
-    SkillCreator, SkillInstaller, SkillMode, SkillSync, SkillToggler, SkillWriter, Snapshot,
-    SshConnector, SyncStatus, calculate_budget, cross_reference, scan_skill,
+    AnyCatalogGateway, Bundle, BundleStore, CatalogEntry, ConfigStore, ConnectionStatus,
+    ContextBudget, ExternalScanner, LintWarning, Phase, Profile, ProfileOp, ProfileStore,
+    ProjectSettings, RemoteHost, RemoteSkill, ScanFinding, Scope, SettingsStore, SignatureVerifier,
+    Skill, SkillCreator, SkillInstaller, SkillMode, SkillSync, SkillToggler, SkillWriter, Snapshot,
+    SshConnector, SyncStatus, TuiConfig, calculate_budget, cross_reference, scan_skill,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::path::PathBuf;
 
 use crate::event::{AppEvent, is_quit};
-use crate::ui::settings_panel::SettingsState;
+use crate::ui::settings_panel::{ConfigState, SettingsState};
 
 /// The active screen (or overlay) in the TUI.
 #[derive(Debug, Clone, PartialEq)]
@@ -278,6 +278,10 @@ pub struct App<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> {
     pub settings_store: Box<dyn SettingsStore>,
     pub settings: Option<ProjectSettings>,
     pub settings_state: SettingsState,
+    #[allow(dead_code)]
+    pub config_store: Box<dyn ConfigStore>,
+    pub config: TuiConfig,
+    pub config_state: ConfigState,
     pub external_scanner: Box<dyn ExternalScanner>,
     #[allow(dead_code)]
     pub signature_verifier: Box<dyn SignatureVerifier>,
@@ -309,6 +313,8 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
         ssh_connector: Box<dyn SshConnector>,
         bundle_store: Box<dyn BundleStore>,
         sync_store: Box<dyn SkillSync>,
+        config_store: Box<dyn ConfigStore>,
+        config: TuiConfig,
     ) -> Self {
         let profiles = profile_store.list().unwrap_or_default();
         let budget = calculate_budget(&all_skills);
@@ -341,6 +347,9 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             editor_state: None,
             settings_store,
             settings: None,
+            config_store,
+            config,
+            config_state: super::ui::settings_panel::ConfigState::default(),
             settings_state: SettingsState::default(),
             external_scanner,
             signature_verifier,
@@ -1760,6 +1769,17 @@ mod tests {
         }
     }
 
+    struct FakeConfigStore;
+    impl ConfigStore for FakeConfigStore {
+        fn read(&self) -> Result<TuiConfig, Box<dyn std::error::Error>> {
+            Ok(TuiConfig::default())
+        }
+
+        fn write(&self, _: &TuiConfig) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
+        }
+    }
+
     fn make_app(skills: Vec<Skill>) -> TestApp {
         App::new(
             skills,
@@ -1775,6 +1795,8 @@ mod tests {
             Box::new(ai_skill_core::NoopSshConnector),
             Box::new(FakeBundleStore),
             Box::new(FakeSkillSync),
+            Box::new(FakeConfigStore),
+            TuiConfig::default(),
         )
     }
 
@@ -1983,6 +2005,8 @@ mod tests {
             Box::new(ai_skill_core::NoopSshConnector),
             Box::new(FakeBundleStore),
             Box::new(FakeSkillSync),
+            Box::new(FakeConfigStore),
+            TuiConfig::default(),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('o')));
@@ -2006,6 +2030,8 @@ mod tests {
             Box::new(ai_skill_core::NoopSshConnector),
             Box::new(FakeBundleStore),
             Box::new(FakeSkillSync),
+            Box::new(FakeConfigStore),
+            TuiConfig::default(),
         );
         app.view = View::Search;
         app.search_state.query = "om".to_string();
@@ -2029,6 +2055,8 @@ mod tests {
             Box::new(ai_skill_core::NoopSshConnector),
             Box::new(FakeBundleStore),
             Box::new(FakeSkillSync),
+            Box::new(FakeConfigStore),
+            TuiConfig::default(),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('x')));
@@ -2063,6 +2091,8 @@ mod tests {
             Box::new(ai_skill_core::NoopSshConnector),
             Box::new(FakeBundleStore),
             Box::new(FakeSkillSync),
+            Box::new(FakeConfigStore),
+            TuiConfig::default(),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('x')));
@@ -2289,6 +2319,8 @@ mod tests {
             Box::new(ai_skill_core::NoopSshConnector),
             Box::new(FakeBundleStore),
             Box::new(FakeSkillSync),
+            Box::new(FakeConfigStore),
+            TuiConfig::default(),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('o'))); // search to get results

@@ -8,6 +8,7 @@ pub mod audit;
 pub mod budget;
 pub mod bundle;
 pub mod catalog;
+pub mod config;
 pub mod creator;
 pub mod drift;
 pub mod duplicate_detector;
@@ -37,6 +38,8 @@ pub use budget::{
 pub use bundle::{Bundle, BundleStore};
 /// Port for querying a remote skill catalog.
 pub use catalog::{AnyCatalogGateway, CatalogEntry};
+/// TUI configuration model and persistence port.
+pub use config::{CONFIG_DIR, CONFIG_FILE, ConfigStore, TuiConfig};
 /// Ports and helpers for creating and editing skill manifests.
 pub use creator::{SkillCreator, SkillWriter, apply_edit, scaffold_skill};
 /// Port and state enum for detecting upstream drift.

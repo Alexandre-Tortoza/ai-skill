@@ -6,14 +6,14 @@ mod terminal;
 mod ui;
 
 use ai_skill_adapters::{
-    CliInstaller, CompositeCatalogGateway, FsBundleStore, FsPluginDiscoverer, FsProfileStore,
-    FsSettingsStore, FsSkillCreator, FsSkillRepository, FsSkillWriter, FsToggler, FsWatcher,
-    GitDriftChecker, GitSkillSync, NpxCatalogGateway, SshCommandConnector,
+    CliInstaller, CompositeCatalogGateway, FsBundleStore, FsConfigStore, FsPluginDiscoverer,
+    FsProfileStore, FsSettingsStore, FsSkillCreator, FsSkillRepository, FsSkillWriter, FsToggler,
+    FsWatcher, GitDriftChecker, GitSkillSync, NpxCatalogGateway, SshCommandConnector,
 };
 use ai_skill_core::{
-    DriftChecker, NoopExternalScanner, NoopSignatureVerifier, PluginMarketplaceDiscovery,
-    RemoteHost, Scope, Skill, SkillMode, SkillRepository, ValidationState, audit_skills,
-    calculate_budget, classify_budget,
+    ConfigStore, DriftChecker, NoopExternalScanner, NoopSignatureVerifier,
+    PluginMarketplaceDiscovery, RemoteHost, Scope, Skill, SkillMode, SkillRepository,
+    ValidationState, audit_skills, calculate_budget, classify_budget,
 };
 
 use app::{App, View};
@@ -31,7 +31,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Ok(());
         }
         CliMode::Json(command) => {
-            let repo = FsSkillRepository::from_env()?;
+            let config_store = config_store_from_env();
+            let config = config_store.read().unwrap_or_default();
+            let mut repo = FsSkillRepository::from_env()?;
+            repo.add_custom_paths(config.custom_agent_paths.clone());
             let mut skills = list_skills_with_drift(&repo)?;
             if let Ok(discoverer) = FsPluginDiscoverer::from_env()
                 && let Ok(plugin_skills) = discoverer.discover_skills()
@@ -61,7 +64,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     terminal::install_panic_hook();
 
-    let repo = FsSkillRepository::from_env()?;
+    let config_store = config_store_from_env();
+    let config = config_store.read().unwrap_or_default();
+
+    let mut repo = FsSkillRepository::from_env()?;
+    repo.add_custom_paths(config.custom_agent_paths.clone());
     let drift_checker = GitDriftChecker;
     let mut skills = list_skills_with_drift(&repo)?;
     let plugin_discoverer = FsPluginDiscoverer::from_env().ok();
@@ -113,6 +120,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Box::new(GitSkillSync::new(
             home_dir()?.join(".claude").join("skills"),
         )),
+        config_store,
+        config,
     );
 
     app.ssh_state.hosts = vec![RemoteHost::new("local", "127.0.0.1")];
@@ -215,14 +224,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ui::budget_panel::render_budget_panel(&app.budget, main_area, f);
                 }
                 View::Settings => {
+                    let chunks =
+                        Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
+                            .split(main_area);
                     if let Some(ref settings) = app.settings {
                         ui::settings_panel::render_settings_panel(
                             settings,
                             &app.settings_state,
-                            main_area,
+                            chunks[0],
                             f,
                         );
                     }
+                    ui::settings_panel::render_config_panel(
+                        &app.config,
+                        &app.config_state,
+                        chunks[1],
+                        f,
+                    );
                 }
                 View::ImportChain => {
                     if let Some(skill) = app.selected_skill() {
@@ -334,6 +352,20 @@ fn home_dir() -> Result<PathBuf, std::io::Error> {
             "HOME is not set; set HOME or run ai-skill from a login shell",
         )
     })
+}
+
+fn config_store_from_env() -> Box<dyn ConfigStore> {
+    FsConfigStore::from_env()
+        .ok()
+        .map(|s| Box::new(s) as Box<dyn ConfigStore>)
+        .unwrap_or_else(|| {
+            let path = home_dir()
+                .unwrap_or_default()
+                .join(".config")
+                .join("ai-skill")
+                .join("config.json");
+            Box::new(FsConfigStore::new(path)) as Box<dyn ConfigStore>
+        })
 }
 
 /// Modes the binary can run in based on CLI argument parsing.

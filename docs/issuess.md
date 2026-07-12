@@ -61,7 +61,7 @@ Legenda: **[MUST]** ataca dor top da pesquisa · **[DEP]** tem dependência bloq
 
 ## Leva F — UX & personalização
 
-- [ ] **Config persistida da TUI**
+- [x] **Config persistida da TUI**
       Paths custom de agentes, tema, keymap, proxy — em `~/.config/ai-skill/`. (Hoje só temos cores/responsividade como débito transversal.)
 - [ ] **Temas (base16) + keymap customizável**
       Definir cores por slot semântico; permitir rebind de teclas estilo Atuin.

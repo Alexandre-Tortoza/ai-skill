@@ -67,6 +67,18 @@ impl FsSkillRepository {
         })
     }
 
+    /// Adds custom skill directories from a config map (agent_label -> path).
+    pub fn add_custom_paths(
+        &mut self,
+        paths: std::collections::HashMap<String, std::path::PathBuf>,
+    ) {
+        for (agent_label, path) in paths {
+            if path.is_dir() {
+                self.extra_roots.push((path, agent_label));
+            }
+        }
+    }
+
     fn scan_root(
         &self,
         root: &PathBuf,
