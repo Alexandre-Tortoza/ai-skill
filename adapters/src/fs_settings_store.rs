@@ -157,12 +157,10 @@ mod tests {
         let (_dir, store) = make_store();
         let settings = ProjectSettings {
             auto_trigger: false,
-            skill_overrides: vec![
-                SkillOverride {
-                    skill_name: "my-skill".into(),
-                    auto_trigger: false,
-                },
-            ],
+            skill_overrides: vec![SkillOverride {
+                skill_name: "my-skill".into(),
+                auto_trigger: false,
+            }],
         };
         store.write(&settings).unwrap();
         let read_back = store.read().unwrap();
@@ -185,7 +183,8 @@ mod tests {
     #[test]
     fn read_existing_json_parses_correctly() {
         let (_dir, store) = make_store();
-        let json = r#"{"skills":{"autoTrigger":false,"skillOverrides":{"alpha":{"autoTrigger":true}}}}"#;
+        let json =
+            r#"{"skills":{"autoTrigger":false,"skillOverrides":{"alpha":{"autoTrigger":true}}}}"#;
         std::fs::write(store.path(), json).unwrap();
         let settings = store.read().unwrap();
         assert!(!settings.auto_trigger);

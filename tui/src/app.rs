@@ -633,12 +633,10 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     override_.auto_trigger = !override_.auto_trigger;
                 }
                 None => {
-                    settings.skill_overrides.push(
-                        ai_skill_core::SkillOverride {
-                            skill_name: skill_name.to_string(),
-                            auto_trigger: false,
-                        },
-                    );
+                    settings.skill_overrides.push(ai_skill_core::SkillOverride {
+                        skill_name: skill_name.to_string(),
+                        auto_trigger: false,
+                    });
                 }
             }
             let _ = self.settings_store.write(settings);
@@ -808,7 +806,11 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                         .filter(|s| s.mode.is_enabled())
                         .map(|s| s.name.clone())
                         .collect();
-                    let profile = Profile { name, skill_names, phase: None };
+                    let profile = Profile {
+                        name,
+                        skill_names,
+                        phase: None,
+                    };
                     let _ = self.profile_store.save(&profile);
                     let profiles = self.profile_store.list().unwrap_or_default();
                     self.profile_state.profiles = profiles;
@@ -1002,7 +1004,10 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
 
     fn activate_phase_preset(&mut self, phase: Phase) {
         let profiles = self.profile_store.list().unwrap_or_default();
-        if let Some(profile) = profiles.into_iter().find(|p| p.phase == Some(phase.clone())) {
+        if let Some(profile) = profiles
+            .into_iter()
+            .find(|p| p.phase == Some(phase.clone()))
+        {
             let ops = ai_skill_core::diff_profile(&self.all_skills, &profile);
             if !ops.is_empty() {
                 let name = profile.name.clone();
@@ -1032,14 +1037,17 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             }
             KeyCode::Char('j') | KeyCode::Down if key.modifiers == KeyModifiers::NONE => {
                 if let Some(ref settings) = self.settings
-                    && self.settings_state.selected_override_index + 1 < settings.skill_overrides.len()
+                    && self.settings_state.selected_override_index + 1
+                        < settings.skill_overrides.len()
                 {
                     self.settings_state.selected_override_index += 1;
                 }
             }
             KeyCode::Char('k') | KeyCode::Up if key.modifiers == KeyModifiers::NONE => {
-                self.settings_state.selected_override_index =
-                    self.settings_state.selected_override_index.saturating_sub(1);
+                self.settings_state.selected_override_index = self
+                    .settings_state
+                    .selected_override_index
+                    .saturating_sub(1);
             }
             KeyCode::Char('o') if key.modifiers == KeyModifiers::NONE => {
                 if let Some(ref mut settings) = self.settings {
@@ -1056,8 +1064,10 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     let idx = self.settings_state.selected_override_index;
                     if idx < settings.skill_overrides.len() {
                         settings.skill_overrides.remove(idx);
-                        self.settings_state.selected_override_index =
-                            self.settings_state.selected_override_index.saturating_sub(1);
+                        self.settings_state.selected_override_index = self
+                            .settings_state
+                            .selected_override_index
+                            .saturating_sub(1);
                         self.settings_state.dirty = true;
                     }
                 }
@@ -1067,7 +1077,9 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
     }
 
     fn recalc_editor_warnings(&mut self) {
-        let Some(state) = &mut self.editor_state else { return };
+        let Some(state) = &mut self.editor_state else {
+            return;
+        };
         let body = state
             .skill
             .manifest_content
@@ -1289,10 +1301,7 @@ mod tests {
         fn read(&self) -> Result<ProjectSettings, Box<dyn std::error::Error>> {
             Ok(ProjectSettings::default())
         }
-        fn write(
-            &self,
-            _settings: &ProjectSettings,
-        ) -> Result<(), Box<dyn std::error::Error>> {
+        fn write(&self, _settings: &ProjectSettings) -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
     }
@@ -1757,7 +1766,10 @@ mod tests {
 
     #[test]
     fn e_key_on_disabled_skill_sets_enable_action_and_confirm_view() {
-        let mut app = make_app(vec![make_disabled_skill_at_path("alpha", "/skills/alpha.disabled")]);
+        let mut app = make_app(vec![make_disabled_skill_at_path(
+            "alpha",
+            "/skills/alpha.disabled",
+        )]);
         app.handle_event(key(KeyCode::Char('e')));
         assert_eq!(app.view, View::Confirm);
         assert!(matches!(app.pending_action, Some(AppAction::Enable { .. })));
@@ -2194,7 +2206,10 @@ mod tests {
 
     #[test]
     fn e_key_on_disabled_skill_still_enables_not_opens_editor() {
-        let mut app = make_app(vec![make_disabled_skill_at_path("alpha", "/skills/alpha.disabled")]);
+        let mut app = make_app(vec![make_disabled_skill_at_path(
+            "alpha",
+            "/skills/alpha.disabled",
+        )]);
         app.handle_event(key(KeyCode::Char('e')));
         assert_eq!(app.view, View::Confirm);
         assert!(matches!(app.pending_action, Some(AppAction::Enable { .. })));
@@ -2236,7 +2251,10 @@ mod tests {
 
     #[test]
     fn n_key_on_disabled_skill_calls_collapse_and_preserves_pref() {
-        let mut app = make_app(vec![make_disabled_skill_at_path("alpha", "/skills/alpha.disabled")]);
+        let mut app = make_app(vec![make_disabled_skill_at_path(
+            "alpha",
+            "/skills/alpha.disabled",
+        )]);
         app.handle_event(key(KeyCode::Char('n')));
         assert!(app.needs_refresh);
         assert!(

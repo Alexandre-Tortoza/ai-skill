@@ -17,9 +17,12 @@ pub fn render_budget_panel(budget: &ContextBudget, area: Rect, frame: &mut Frame
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
 
-    let chunks =
-        Layout::vertical([Constraint::Length(3), Constraint::Length(3), Constraint::Min(0)])
-            .split(inner);
+    let chunks = Layout::vertical([
+        Constraint::Length(3),
+        Constraint::Length(3),
+        Constraint::Min(0),
+    ])
+    .split(inner);
 
     // Gauge
     let gauge_color = if budget.usage_ratio >= 1.0 {
@@ -57,9 +60,7 @@ pub fn render_budget_panel(budget: &ContextBudget, area: Rect, frame: &mut Frame
             pct,
             truncated_skills,
         } => {
-            format!(
-                "OVER BUDGET ({pct:.0}%) — ~{truncated_skills} skills may be truncated"
-            )
+            format!("OVER BUDGET ({pct:.0}%) — ~{truncated_skills} skills may be truncated")
         }
     };
     let summary_color = match &warning {
@@ -70,7 +71,9 @@ pub fn render_budget_panel(budget: &ContextBudget, area: Rect, frame: &mut Frame
     };
     let summary = Paragraph::new(Line::from(Span::styled(
         warning_str,
-        Style::default().fg(summary_color).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(summary_color)
+            .add_modifier(Modifier::BOLD),
     )));
     frame.render_widget(summary, chunks[1]);
 

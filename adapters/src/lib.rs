@@ -15,10 +15,10 @@ pub mod npx_catalog_gateway;
 
 /// Adapter that shells out to `npx skills add|remove|update`.
 pub use cli_installer::CliInstaller;
-/// Adapter that reads/writes `.claude/settings.json` for auto-trigger control.
-pub use fs_settings_store::FsSettingsStore;
 /// Adapter that persists profiles as YAML files under `~/.claude/ai-skill/profiles/`.
 pub use fs_profile_store::FsProfileStore;
+/// Adapter that reads/writes `.claude/settings.json` for auto-trigger control.
+pub use fs_settings_store::FsSettingsStore;
 /// Adapters that create and write SKILL.md files to the filesystem.
 pub use fs_skill_creator::{FsSkillCreator, FsSkillWriter};
 /// Adapter that scans `~/.claude/skills/` (and optionally the project `.claude/skills/`).

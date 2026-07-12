@@ -45,7 +45,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let watcher = FsWatcher::new(&skill_roots).ok();
 
     let mut term = terminal::setup()?;
-    let settings_store = FsSettingsStore::from_env().ok()
+    let settings_store = FsSettingsStore::from_env()
+        .ok()
         .map(|s| Box::new(s) as Box<dyn ai_skill_core::SettingsStore>)
         .unwrap_or_else(|| {
             let path = std::path::PathBuf::from(".claude/settings.json");

@@ -28,7 +28,7 @@ jobs:
         run: cargo install cargo-tarpaulin
 
       - name: Generate coverage report
-        run: cargo tarpaulin --workspace --out xml --engine ptrace --avoid-cfg-test
+        run: cargo tarpaulin --workspace --out xml --engine ptrace --avoid-cfg-tarpaulin
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v7

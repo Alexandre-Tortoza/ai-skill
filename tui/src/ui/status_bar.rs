@@ -2,7 +2,11 @@
 
 use ai_skill_core::BudgetWarning;
 use ratatui::{
-    Frame, layout::Rect, style::{Color, Style}, text::{Line, Span}, widgets::Paragraph,
+    Frame,
+    layout::Rect,
+    style::{Color, Style},
+    text::{Line, Span},
+    widgets::Paragraph,
 };
 
 use crate::{app::View, ui::style_helpers::fg_bg};
@@ -15,9 +19,7 @@ pub fn render_status_bar(
     budget_warning: Option<&BudgetWarning>,
 ) {
     let hints = match view {
-        View::List => {
-            "j/k  d  e  n  r  u  a  c  A aud  B bud  S set  s srch  F1-F4  ? quit"
-        }
+        View::List => "j/k  d  e  n  r  u  a  c  A aud  B bud  S set  s srch  F1-F4  ? quit",
         View::Detail => "j/k scroll  Esc back  q quit",
         View::Search => "type search  j/k move  Enter install  Esc back",
         View::Help => "Esc close",
@@ -40,23 +42,20 @@ pub fn render_status_bar(
         )),
         Some(BudgetWarning::Critical { pct }) => Some(Span::styled(
             format!(" !! {pct:.0}%"),
-            Style::default().fg(Color::Red).add_modifier(
-                ratatui::style::Modifier::BOLD,
-            ),
+            Style::default()
+                .fg(Color::Red)
+                .add_modifier(ratatui::style::Modifier::BOLD),
         )),
         Some(BudgetWarning::OverBudget { pct, .. }) => Some(Span::styled(
             format!(" OVER {pct:.0}%"),
-            Style::default().fg(Color::LightRed).add_modifier(
-                ratatui::style::Modifier::BOLD,
-            ),
+            Style::default()
+                .fg(Color::LightRed)
+                .add_modifier(ratatui::style::Modifier::BOLD),
         )),
     };
 
     let content = match warning_span {
-        Some(span) => Line::from(vec![
-            Span::raw(hints),
-            span,
-        ]),
+        Some(span) => Line::from(vec![Span::raw(hints), span]),
         None => Line::from(Span::raw(hints)),
     };
 

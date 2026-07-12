@@ -155,9 +155,7 @@ fn edit_distance(a: &str, b: &str) -> usize {
         curr[0] = i + 1;
         for (j, cb) in b.chars().enumerate() {
             let cost = if ca == cb { 0 } else { 1 };
-            curr[j + 1] = (curr[j] + 1)
-                .min(prev[j + 1] + 1)
-                .min(prev[j] + cost);
+            curr[j + 1] = (curr[j] + 1).min(prev[j + 1] + 1).min(prev[j] + cost);
         }
         std::mem::swap(&mut prev, &mut curr);
     }
@@ -168,10 +166,7 @@ fn edit_distance(a: &str, b: &str) -> usize {
 /// typosquatting/impersonation.
 ///
 /// Returns findings for entries with similar names (edit distance ≤ 2).
-pub fn cross_reference(
-    entry: &CatalogEntry,
-    catalog: &dyn AnyCatalogGateway,
-) -> Vec<ScanFinding> {
+pub fn cross_reference(entry: &CatalogEntry, catalog: &dyn AnyCatalogGateway) -> Vec<ScanFinding> {
     let results = match catalog.search(&entry.name) {
         Ok(entries) => entries,
         Err(_) => return vec![],

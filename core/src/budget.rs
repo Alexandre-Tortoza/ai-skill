@@ -76,11 +76,7 @@ pub enum BudgetWarning {
 pub fn estimate_skill_cost(skill: &Skill) -> SkillCost {
     let char_count = match skill.mode {
         crate::SkillMode::Active => {
-            let content_len = skill
-                .manifest_content
-                .as_deref()
-                .map(str::len)
-                .unwrap_or(0);
+            let content_len = skill.manifest_content.as_deref().map(str::len).unwrap_or(0);
             let agents_len: usize = skill.agents.iter().map(|a| a.len()).sum();
             content_len + agents_len
         }
@@ -277,7 +273,10 @@ mod tests {
         };
         let warning = classify_budget(&budget);
         assert!(matches!(warning, BudgetWarning::OverBudget { .. }));
-        if let BudgetWarning::OverBudget { truncated_skills, .. } = warning {
+        if let BudgetWarning::OverBudget {
+            truncated_skills, ..
+        } = warning
+        {
             // The big skill (80 chars) alone covers the 20-char overage.
             assert!(truncated_skills >= 1);
         }
@@ -294,7 +293,11 @@ mod tests {
 
     #[test]
     fn name_only_skill_only_counts_name() {
-        let mut s = skill("my-skill", Some("very long description that would normally cost a lot"), vec!["claude", "codex"]);
+        let mut s = skill(
+            "my-skill",
+            Some("very long description that would normally cost a lot"),
+            vec!["claude", "codex"],
+        );
         s.mode = SkillMode::NameOnly;
         let cost = estimate_skill_cost(&s);
         assert_eq!(cost.name, "my-skill");

@@ -60,14 +60,20 @@ pub fn render_create_wizard(state: &CreateWizardState, area: Rect, frame: &mut F
             Style::default().add_modifier(Modifier::BOLD),
         )));
         for err in &state.errors {
-            lines.push(Line::from(Span::styled(format!("  ✗ {err}"), fg(Color::Red))));
+            lines.push(Line::from(Span::styled(
+                format!("  ✗ {err}"),
+                fg(Color::Red),
+            )));
         }
     }
 
     lines.push(Line::raw(""));
     if state.step == CreateStep::Preview {
         if state.errors.is_empty() {
-            lines.push(Line::from(Span::styled("[ Press Enter to create ]", active)));
+            lines.push(Line::from(Span::styled(
+                "[ Press Enter to create ]",
+                active,
+            )));
         } else {
             lines.push(Line::from(Span::styled(
                 "[ Fix errors above before creating ]",
@@ -75,7 +81,10 @@ pub fn render_create_wizard(state: &CreateWizardState, area: Rect, frame: &mut F
             )));
         }
     } else {
-        lines.push(Line::from(Span::styled("Tab: next field  Esc: cancel", inactive)));
+        lines.push(Line::from(Span::styled(
+            "Tab: next field  Esc: cancel",
+            inactive,
+        )));
     }
 
     let widget = Paragraph::new(lines).block(
