@@ -16,6 +16,7 @@ pub mod frontmatter;
 pub mod installer;
 pub mod linter;
 pub mod mode;
+pub mod plugin_discovery;
 pub mod profile;
 pub mod repository;
 pub mod security_scan;
@@ -53,6 +54,11 @@ pub use linter::{
 };
 /// Skill operating mode.
 pub use mode::SkillMode;
+/// Plugin marketplace discovery models and port.
+pub use plugin_discovery::{
+    MarketplaceManifest, NoopPluginDiscoverer, PluginDiscoveredSkill, PluginEntry,
+    PluginMarketplaceDiscovery,
+};
 /// Profile model, diff algorithm, and persistence port.
 pub use profile::{Phase, Profile, ProfileOp, ProfileStore, diff_profile};
 /// Port for listing installed skills.

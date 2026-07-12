@@ -56,7 +56,7 @@ Legenda: **[MUST]** ataca dor top da pesquisa · **[DEP]** tem dependência bloq
       `CompositeCatalogGateway` em `adapters` que agrega múltiplos `Box<dyn AnyCatalogGateway>` com dedup case-insensitive. Fontes falham graciosamente sem bloquear as demais. Atualmente configurado com `NpxCatalogGateway`; novas fontes só precisam implementar o trait `AnyCatalogGateway`.
 - [x] **Suporte a mais agentes**
       Estender além de Claude Code: Cursor, Windsurf, Copilot, Codex, Gemini CLI, OpenCode, etc. — cada um com seu diretório/formato, detectados e adotados.
-- [ ] **Compat com plugin marketplace**
+- [x] **Compat com plugin marketplace**
       Descobrir skills declaradas em `.claude-plugin/marketplace.json` / `plugin.json`.
 
 ## Leva F — UX & personalização

@@ -6,13 +6,14 @@ mod terminal;
 mod ui;
 
 use ai_skill_adapters::{
-    CliInstaller, CompositeCatalogGateway, FsBundleStore, FsProfileStore, FsSettingsStore,
-    FsSkillCreator, FsSkillRepository, FsSkillWriter, FsToggler, FsWatcher, GitDriftChecker,
-    NpxCatalogGateway, SshCommandConnector,
+    CliInstaller, CompositeCatalogGateway, FsBundleStore, FsPluginDiscoverer, FsProfileStore,
+    FsSettingsStore, FsSkillCreator, FsSkillRepository, FsSkillWriter, FsToggler, FsWatcher,
+    GitDriftChecker, NpxCatalogGateway, SshCommandConnector,
 };
 use ai_skill_core::{
-    DriftChecker, NoopExternalScanner, NoopSignatureVerifier, RemoteHost, Skill, SkillRepository,
-    audit_skills, calculate_budget, classify_budget,
+    DriftChecker, NoopExternalScanner, NoopSignatureVerifier, PluginMarketplaceDiscovery,
+    RemoteHost, Scope, Skill, SkillMode, SkillRepository, ValidationState, audit_skills,
+    calculate_budget, classify_budget,
 };
 
 use app::{App, View};
@@ -31,7 +32,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         CliMode::Json(command) => {
             let repo = FsSkillRepository::from_env()?;
-            let skills = list_skills_with_drift(&repo)?;
+            let mut skills = list_skills_with_drift(&repo)?;
+            if let Ok(discoverer) = FsPluginDiscoverer::from_env()
+                && let Ok(plugin_skills) = discoverer.discover_skills()
+            {
+                let plugin_skill_objs: Vec<Skill> = plugin_skills
+                    .into_iter()
+                    .map(|ps| Skill {
+                        name: ps.name,
+                        path: ps.path,
+                        scope: Scope::Global,
+                        agents: vec![format!("Plugin ({})", ps.marketplace_key)],
+                        tags: vec![],
+                        managed: false,
+                        mode: SkillMode::Active,
+                        validation: ValidationState::Valid,
+                        manifest_content: ps.manifest_content,
+                        drift_state: ai_skill_core::DriftState::Unknown,
+                    })
+                    .collect();
+                skills.extend(plugin_skill_objs);
+            }
             print_json(command, &skills)?;
             return Ok(());
         }
@@ -42,7 +63,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let repo = FsSkillRepository::from_env()?;
     let drift_checker = GitDriftChecker;
-    let skills = list_skills_with_drift(&repo)?;
+    let mut skills = list_skills_with_drift(&repo)?;
+    let plugin_discoverer = FsPluginDiscoverer::from_env().ok();
+    if let Some(ref d) = plugin_discoverer
+        && let Ok(plugin_skills) = d.discover_skills()
+    {
+        let plugin_skill_objs: Vec<Skill> = plugin_skills
+            .into_iter()
+            .map(|ps| Skill {
+                name: ps.name,
+                path: ps.path,
+                scope: Scope::Global,
+                agents: vec![format!("Plugin ({})", ps.marketplace_key)],
+                tags: vec![],
+                managed: false,
+                mode: SkillMode::Active,
+                validation: ValidationState::Valid,
+                manifest_content: ps.manifest_content,
+                drift_state: ai_skill_core::DriftState::Unknown,
+            })
+            .collect();
+        skills.extend(plugin_skill_objs);
+    }
     let skill_roots = vec![home_dir()?.join(".claude").join("skills")];
     let watcher = FsWatcher::new(&skill_roots).ok();
 
@@ -227,6 +269,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if app.needs_refresh {
             if let Ok(mut skills) = repo.list() {
                 apply_drift(&mut skills, &drift_checker);
+                if let Some(ref d) = plugin_discoverer
+                    && let Ok(plugin_skills) = d.discover_skills()
+                {
+                    let plugin_skill_objs: Vec<Skill> = plugin_skills
+                        .into_iter()
+                        .map(|ps| Skill {
+                            name: ps.name,
+                            path: ps.path,
+                            scope: Scope::Global,
+                            agents: vec![format!("Plugin ({})", ps.marketplace_key)],
+                            tags: vec![],
+                            managed: false,
+                            mode: SkillMode::Active,
+                            validation: ValidationState::Valid,
+                            manifest_content: ps.manifest_content,
+                            drift_state: ai_skill_core::DriftState::Unknown,
+                        })
+                        .collect();
+                    skills.extend(plugin_skill_objs);
+                }
                 app.budget = calculate_budget(&skills);
                 app.all_skills = skills;
             }
