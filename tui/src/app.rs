@@ -1,9 +1,9 @@
 //! Application state, view transitions, and event handling.
 
 use ai_skill_core::{
-    AnyCatalogGateway, CatalogEntry, ContextBudget, Phase, Profile, ProfileOp, ProfileStore,
-    ProjectSettings, ScanFinding, Scope, SettingsStore, Skill, SkillCreator, SkillInstaller,
-    SkillMode, SkillToggler, SkillWriter, calculate_budget, scan_skill,
+    AnyCatalogGateway, CatalogEntry, ContextBudget, LintWarning, Phase, Profile, ProfileOp,
+    ProfileStore, ProjectSettings, ScanFinding, Scope, SettingsStore, Skill, SkillCreator,
+    SkillInstaller, SkillMode, SkillToggler, SkillWriter, calculate_budget, scan_skill,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::path::PathBuf;
@@ -54,6 +54,8 @@ pub struct CreateWizardState {
     pub agents_input: String,
     /// Raw tags input string.
     pub tags_input: String,
+    /// Validation errors for the current input.
+    pub errors: Vec<String>,
 }
 
 /// Field being edited in the skill editor.
@@ -78,6 +80,8 @@ pub struct EditorState {
     pub agents_input: String,
     /// Current tags input.
     pub tags_input: String,
+    /// Linter warnings for the current skill content.
+    pub warnings: Vec<LintWarning>,
 }
 
 /// An action that can be confirmed or rejected by the user.
@@ -220,6 +224,7 @@ pub struct App<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> {
     pub should_quit: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
     pub fn new(
         all_skills: Vec<Skill>,
@@ -559,12 +564,19 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     let agents_input = skill.agents.join(", ");
                     let tags_input = skill.tags.join(", ");
                     let skill = skill.clone();
+                    let warnings = ai_skill_core::lint_content(
+                        skill.manifest_content.as_deref().unwrap_or(""),
+                        &self.all_skills,
+                        &name_input,
+                        Some(&skill.name),
+                    );
                     self.editor_state = Some(EditorState {
                         skill,
                         field: EditField::default(),
                         name_input,
                         agents_input,
                         tags_input,
+                        warnings,
                     });
                     self.view = View::Editor;
                 }
@@ -839,6 +851,10 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 };
             }
             KeyCode::Enter if self.create_wizard_state.step == CreateStep::Preview => {
+                self.recalc_wizard_errors();
+                if !self.create_wizard_state.errors.is_empty() {
+                    return;
+                }
                 let name = self.create_wizard_state.name.trim().to_string();
                 if !name.is_empty() {
                     let agents: Vec<String> = self
@@ -870,9 +886,11 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             KeyCode::Backspace => match self.create_wizard_state.step {
                 CreateStep::Name => {
                     self.create_wizard_state.name.pop();
+                    self.recalc_wizard_errors();
                 }
                 CreateStep::Agents => {
                     self.create_wizard_state.agents_input.pop();
+                    self.recalc_wizard_errors();
                 }
                 CreateStep::Tags => {
                     self.create_wizard_state.tags_input.pop();
@@ -881,8 +899,14 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             },
             KeyCode::Char(c) if key.modifiers == KeyModifiers::NONE => {
                 match self.create_wizard_state.step {
-                    CreateStep::Name => self.create_wizard_state.name.push(c),
-                    CreateStep::Agents => self.create_wizard_state.agents_input.push(c),
+                    CreateStep::Name => {
+                        self.create_wizard_state.name.push(c);
+                        self.recalc_wizard_errors();
+                    }
+                    CreateStep::Agents => {
+                        self.create_wizard_state.agents_input.push(c);
+                        self.recalc_wizard_errors();
+                    }
                     CreateStep::Tags => self.create_wizard_state.tags_input.push(c),
                     CreateStep::Preview => {}
                 }
@@ -950,15 +974,19 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                         }
                     }
                 }
+                self.recalc_editor_warnings();
             }
             KeyCode::Char(c) if key.modifiers == KeyModifiers::NONE => {
                 if let Some(state) = &mut self.editor_state {
                     match state.field {
-                        EditField::Name => state.name_input.push(c),
+                        EditField::Name => {
+                            state.name_input.push(c);
+                        }
                         EditField::Agents => state.agents_input.push(c),
                         EditField::Tags => state.tags_input.push(c),
                     }
                 }
+                self.recalc_editor_warnings();
             }
             _ => {}
         }
@@ -986,10 +1014,10 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
     fn handle_settings_key(&mut self, key: crossterm::event::KeyEvent) {
         match key.code {
             KeyCode::Esc => {
-                if self.settings_state.dirty {
-                    if let Some(ref settings) = self.settings {
-                        let _ = self.settings_store.write(settings);
-                    }
+                if self.settings_state.dirty
+                    && let Some(ref settings) = self.settings
+                {
+                    let _ = self.settings_store.write(settings);
                 }
                 self.settings = None;
                 self.view = View::List;
@@ -1001,10 +1029,10 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 }
             }
             KeyCode::Char('j') | KeyCode::Down if key.modifiers == KeyModifiers::NONE => {
-                if let Some(ref settings) = self.settings {
-                    if self.settings_state.selected_override_index + 1 < settings.skill_overrides.len() {
-                        self.settings_state.selected_override_index += 1;
-                    }
+                if let Some(ref settings) = self.settings
+                    && self.settings_state.selected_override_index + 1 < settings.skill_overrides.len()
+                {
+                    self.settings_state.selected_override_index += 1;
                 }
             }
             KeyCode::Char('k') | KeyCode::Up if key.modifiers == KeyModifiers::NONE => {
@@ -1034,6 +1062,35 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             }
             _ => {}
         }
+    }
+
+    fn recalc_editor_warnings(&mut self) {
+        let Some(state) = &mut self.editor_state else { return };
+        let body = state
+            .skill
+            .manifest_content
+            .as_deref()
+            .and_then(ai_skill_core::extract_body)
+            .unwrap_or("");
+        state.warnings = ai_skill_core::lint_description(
+            body,
+            &state.name_input,
+            &self.all_skills,
+            Some(&state.skill.name),
+        );
+    }
+
+    fn recalc_wizard_errors(&mut self) {
+        let name = self.create_wizard_state.name.trim().to_string();
+        let agents: Vec<String> = self
+            .create_wizard_state
+            .agents_input
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        self.create_wizard_state.errors =
+            ai_skill_core::validate_wizard_input(&name, &agents, &self.all_skills);
     }
 
     fn do_search(&mut self) {
@@ -2050,6 +2107,7 @@ mod tests {
         app.view = View::CreateWizard;
         app.create_wizard_state.step = CreateStep::Preview;
         app.create_wizard_state.name = "my-skill".into();
+        app.create_wizard_state.agents_input = "claude".into();
         app.handle_event(key(KeyCode::Enter));
         assert!(app.needs_refresh);
         assert_eq!(app.view, View::List);
@@ -2086,6 +2144,7 @@ mod tests {
             name_input: "x".into(),
             agents_input: String::new(),
             tags_input: String::new(),
+            warnings: vec![],
         });
         app.handle_event(key(KeyCode::Esc));
         assert_eq!(app.view, View::List);
@@ -2102,6 +2161,7 @@ mod tests {
             name_input: "x".into(),
             agents_input: String::new(),
             tags_input: String::new(),
+            warnings: vec![],
         });
         assert_eq!(app.editor_state.as_ref().unwrap().field, EditField::Name);
         app.handle_event(key(KeyCode::Tab));
@@ -2122,6 +2182,7 @@ mod tests {
             name_input: "alpha".into(),
             agents_input: "claude".into(),
             tags_input: String::new(),
+            warnings: vec![],
         });
         app.handle_event(key(KeyCode::Enter));
         assert!(app.needs_refresh);

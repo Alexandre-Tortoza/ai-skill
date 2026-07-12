@@ -224,7 +224,7 @@ mod tests {
         assert_eq!(read.auto_trigger, original.auto_trigger);
         assert_eq!(read.skill_overrides.len(), original.skill_overrides.len());
         assert_eq!(read.skill_overrides[0].skill_name, "a");
-        assert_eq!(read.skill_overrides[1].auto_trigger, true);
+        assert!(read.skill_overrides[1].auto_trigger);
     }
 
     #[test]

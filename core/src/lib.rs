@@ -12,6 +12,7 @@ pub mod drift;
 pub mod duplicate_detector;
 pub mod frontmatter;
 pub mod installer;
+pub mod linter;
 pub mod mode;
 pub mod profile;
 pub mod repository;
@@ -35,6 +36,8 @@ pub use creator::{SkillCreator, SkillWriter, apply_edit, scaffold_skill};
 pub use drift::{DriftChecker, DriftState};
 /// Case-insensitive duplicate name detection across a skill slice.
 pub use duplicate_detector::detect_duplicates;
+/// Linter for skill descriptions and wizard input validation.
+pub use linter::{LintLevel, LintWarning, lint_content, lint_description, validate_name, validate_wizard_input};
 /// Frontmatter (`---` delimited YAML) parsing and body extraction.
 pub use frontmatter::{ParseError, SkillMetadata, extract_body, parse_frontmatter};
 /// Ports for installing, removing, and updating skills via external tooling.
