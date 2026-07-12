@@ -21,8 +21,22 @@ cargo run -p ai-skill
 | (no arguments) | Launches the interactive TUI |
 | `-h`, `--help` | Prints usage information and exits |
 | `-V`, `--version` | Prints the binary version and exits |
+| `--json list` | Prints installed skills as JSON and exits |
+| `--json audit` | Prints the aggregated audit report as JSON and exits |
+| `--markdown audit` | Prints the aggregated audit report as Markdown and exits |
 
 If the terminal is too small, a resize message is shown instead of a broken layout.
+
+### Exportable Audit Report
+
+For CI jobs or periodic reviews, export the same aggregate health report used by the TUI audit panel:
+
+```sh
+ai-skill --json audit > ai-skill-audit.json
+ai-skill --markdown audit > ai-skill-audit.md
+```
+
+The report includes broken skills, duplicate names, skills without agent assignments, available updates and context budget usage.
 
 ## Views (Modes)
 

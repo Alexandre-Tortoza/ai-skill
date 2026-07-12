@@ -11,7 +11,7 @@ use ai_skill_adapters::{
     FsWatcher, GitDriftChecker, GitSkillSync, NpxCatalogGateway, SshCommandConnector,
 };
 use ai_skill_core::{
-    ConfigStore, DriftChecker, NoopExternalScanner, NoopSignatureVerifier,
+    BudgetWarning, ConfigStore, DriftChecker, NoopExternalScanner, NoopSignatureVerifier,
     PluginMarketplaceDiscovery, RemoteHost, Scope, Skill, SkillMode, SkillRepository,
     ValidationState, audit_skills, calculate_budget, classify_budget,
 };
@@ -31,32 +31,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Ok(());
         }
         CliMode::Json(command) => {
-            let config_store = config_store_from_env();
-            let config = config_store.read().unwrap_or_default();
-            let mut repo = FsSkillRepository::from_env()?;
-            repo.add_custom_paths(config.custom_agent_paths.clone());
-            let mut skills = list_skills_with_drift(&repo)?;
-            if let Ok(discoverer) = FsPluginDiscoverer::from_env()
-                && let Ok(plugin_skills) = discoverer.discover_skills()
-            {
-                let plugin_skill_objs: Vec<Skill> = plugin_skills
-                    .into_iter()
-                    .map(|ps| Skill {
-                        name: ps.name,
-                        path: ps.path,
-                        scope: Scope::Global,
-                        agents: vec![format!("Plugin ({})", ps.marketplace_key)],
-                        tags: vec![],
-                        managed: false,
-                        mode: SkillMode::Active,
-                        validation: ValidationState::Valid,
-                        manifest_content: ps.manifest_content,
-                        drift_state: ai_skill_core::DriftState::Unknown,
-                    })
-                    .collect();
-                skills.extend(plugin_skill_objs);
-            }
+            let skills = load_cli_skills()?;
             print_json(command, &skills)?;
+            return Ok(());
+        }
+        CliMode::Markdown(command) => {
+            let skills = load_cli_skills()?;
+            print_markdown(command, &skills);
             return Ok(());
         }
         CliMode::Tui => {}
@@ -328,6 +309,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn load_cli_skills() -> Result<Vec<Skill>, Box<dyn std::error::Error>> {
+    let config_store = config_store_from_env();
+    let config = config_store.read().unwrap_or_default();
+    let mut repo = FsSkillRepository::from_env()?;
+    repo.add_custom_paths(config.custom_agent_paths.clone());
+    let mut skills = list_skills_with_drift(&repo)?;
+    if let Ok(discoverer) = FsPluginDiscoverer::from_env()
+        && let Ok(plugin_skills) = discoverer.discover_skills()
+    {
+        let plugin_skill_objs: Vec<Skill> = plugin_skills
+            .into_iter()
+            .map(|ps| Skill {
+                name: ps.name,
+                path: ps.path,
+                scope: Scope::Global,
+                agents: vec![format!("Plugin ({})", ps.marketplace_key)],
+                tags: vec![],
+                managed: false,
+                mode: SkillMode::Active,
+                validation: ValidationState::Valid,
+                manifest_content: ps.manifest_content,
+                drift_state: ai_skill_core::DriftState::Unknown,
+            })
+            .collect();
+        skills.extend(plugin_skill_objs);
+    }
+    Ok(skills)
+}
+
 /// Loads all skills and runs drift detection for each one.
 fn list_skills_with_drift(
     repo: &FsSkillRepository,
@@ -377,6 +387,8 @@ enum CliMode {
     Print(&'static str),
     /// Emit structured JSON and exit.
     Json(JsonCommand),
+    /// Emit Markdown and exit.
+    Markdown(MarkdownCommand),
 }
 
 /// Subcommands available under `--json`.
@@ -385,6 +397,13 @@ enum JsonCommand {
     /// `--json list` — list all skills as JSON.
     List,
     /// `--json audit` — audit report as JSON.
+    Audit,
+}
+
+/// Subcommands available under `--markdown`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MarkdownCommand {
+    /// `--markdown audit` — audit report as Markdown.
     Audit,
 }
 
@@ -405,6 +424,13 @@ fn parse_cli_args(mut args: impl Iterator<Item = String>) -> Result<CliMode, Str
             )),
             None => Err("missing --json operation; expected 'list' or 'audit'".to_string()),
         },
+        "--markdown" => match args.next().as_deref() {
+            Some("audit") => Ok(CliMode::Markdown(MarkdownCommand::Audit)),
+            Some(other) => Err(format!(
+                "unknown --markdown operation '{other}'; expected 'audit'"
+            )),
+            None => Err("missing --markdown operation; expected 'audit'".to_string()),
+        },
         _ => Ok(CliMode::Tui),
     }
 }
@@ -415,11 +441,14 @@ fn print_json(command: JsonCommand, skills: &[Skill]) -> Result<(), Box<dyn std:
         JsonCommand::List => serde_json::to_writer_pretty(std::io::stdout(), skills)?,
         JsonCommand::Audit => {
             let report = audit_skills(skills);
+            let budget_warning = classify_budget(&report.budget);
             let json = JsonAuditReport {
                 broken: report.broken,
                 duplicates: report.duplicates,
                 no_agents: report.no_agents,
                 update_available: report.update_available,
+                budget: report.budget,
+                budget_warning,
             };
             serde_json::to_writer_pretty(std::io::stdout(), &json)?;
         }
@@ -428,12 +457,98 @@ fn print_json(command: JsonCommand, skills: &[Skill]) -> Result<(), Box<dyn std:
     Ok(())
 }
 
+/// Emits Markdown output for the given command to stdout.
+fn print_markdown(command: MarkdownCommand, skills: &[Skill]) {
+    match command {
+        MarkdownCommand::Audit => print!("{}", render_audit_markdown(skills)),
+    }
+}
+
+fn render_audit_markdown(skills: &[Skill]) -> String {
+    let report = audit_skills(skills);
+    let warning = classify_budget(&report.budget);
+    let mut out = String::new();
+
+    out.push_str("# ai-skill Health Report\n\n");
+    out.push_str("## Summary\n\n");
+    out.push_str("| Category | Count |\n");
+    out.push_str("|---|---:|\n");
+    out.push_str(&format!("| Total skills | {} |\n", skills.len()));
+    out.push_str(&format!("| Broken | {} |\n", report.broken.len()));
+    out.push_str(&format!("| Duplicates | {} |\n", report.duplicates.len()));
+    out.push_str(&format!("| No agents | {} |\n", report.no_agents.len()));
+    out.push_str(&format!(
+        "| Updates available | {} |\n",
+        report.update_available.len()
+    ));
+
+    out.push_str("\n## Context Budget\n\n");
+    out.push_str(&format!("- Limit: {} chars\n", report.budget.limit));
+    out.push_str(&format!("- Used: {} chars\n", report.budget.used));
+    out.push_str(&format!("- Available: {} chars\n", report.budget.available));
+    out.push_str(&format!(
+        "- Usage: {:.1}%\n",
+        report.budget.usage_ratio * 100.0
+    ));
+    out.push_str(&format!("- Warning: {}\n", budget_warning_label(&warning)));
+
+    append_skill_section(&mut out, "Broken", &report.broken);
+    append_skill_section(&mut out, "Duplicates", &report.duplicates);
+    append_skill_section(&mut out, "No Agents", &report.no_agents);
+    append_skill_section(&mut out, "Updates Available", &report.update_available);
+
+    out
+}
+
+fn append_skill_section(out: &mut String, title: &str, skills: &[&Skill]) {
+    out.push_str(&format!("\n## {title}\n\n"));
+    if skills.is_empty() {
+        out.push_str("No findings.\n");
+        return;
+    }
+
+    out.push_str("| Skill | Scope | Agents | Path |\n");
+    out.push_str("|---|---|---|---|\n");
+    for skill in skills {
+        let agents = if skill.agents.is_empty() {
+            "-".to_string()
+        } else {
+            skill.agents.join(", ")
+        };
+        out.push_str(&format!(
+            "| {} | {:?} | {} | `{}` |\n",
+            escape_markdown_cell(&skill.name),
+            skill.scope,
+            escape_markdown_cell(&agents),
+            skill.path.display()
+        ));
+    }
+}
+
+fn budget_warning_label(warning: &BudgetWarning) -> String {
+    match warning {
+        BudgetWarning::None => "none".to_string(),
+        BudgetWarning::Approaching { pct } => format!("approaching ({pct:.1}%)"),
+        BudgetWarning::Critical { pct } => format!("critical ({pct:.1}%)"),
+        BudgetWarning::OverBudget {
+            pct,
+            truncated_skills,
+        } => format!("over budget ({pct:.1}%, ~{truncated_skills} truncated skills)"),
+    }
+}
+
+fn escape_markdown_cell(value: &str) -> String {
+    value.replace('|', "\\|").replace('\n', " ")
+}
+
 #[derive(Serialize)]
 struct JsonAuditReport<'a> {
     broken: Vec<&'a Skill>,
     duplicates: Vec<&'a Skill>,
     no_agents: Vec<&'a Skill>,
     update_available: Vec<&'a Skill>,
+    budget: ai_skill_core::ContextBudget,
+    budget_warning: BudgetWarning,
 }
 
 /// Returns the version string (`ai-skill X.Y.Z`).
@@ -443,12 +558,14 @@ fn version_text() -> &'static str {
 
 /// Returns the help usage text.
 fn help_text() -> &'static str {
-    "ai-skill - manage AI agent skills\n\nUsage:\n  ai-skill\n  ai-skill --help\n  ai-skill --version\n  ai-skill --json list\n  ai-skill --json audit\n"
+    "ai-skill - manage AI agent skills\n\nUsage:\n  ai-skill\n  ai-skill --help\n  ai-skill --version\n  ai-skill --json list\n  ai-skill --json audit\n  ai-skill --markdown audit\n"
 }
 
 #[cfg(test)]
 mod cli_tests {
-    use super::{CliMode, JsonCommand, parse_cli_args};
+    use super::{CliMode, JsonCommand, MarkdownCommand, parse_cli_args, render_audit_markdown};
+    use ai_skill_core::{DriftState, Scope, Skill, SkillMode, ValidationState};
+    use std::path::PathBuf;
 
     #[test]
     fn version_flag_prints_binary_version() {
@@ -489,9 +606,57 @@ mod cli_tests {
     }
 
     #[test]
+    fn markdown_audit_mode_is_supported() {
+        assert_eq!(
+            parse_cli_args(["--markdown".to_string(), "audit".to_string()].into_iter()).unwrap(),
+            CliMode::Markdown(MarkdownCommand::Audit)
+        );
+    }
+
+    #[test]
     fn json_requires_operation() {
         let err = parse_cli_args(["--json".to_string()].into_iter()).unwrap_err();
 
         assert!(err.contains("missing --json operation"));
+    }
+
+    #[test]
+    fn markdown_requires_operation() {
+        let err = parse_cli_args(["--markdown".to_string()].into_iter()).unwrap_err();
+
+        assert!(err.contains("missing --markdown operation"));
+    }
+
+    #[test]
+    fn markdown_audit_contains_summary_budget_and_findings() {
+        let skills = vec![
+            skill("broken", ValidationState::BrokenSymlink, vec!["claude"]),
+            skill("lonely", ValidationState::Valid, vec![]),
+        ];
+
+        let report = render_audit_markdown(&skills);
+
+        assert!(report.contains("# ai-skill Health Report"));
+        assert!(report.contains("| Total skills | 2 |"));
+        assert!(report.contains("## Context Budget"));
+        assert!(report.contains("## Broken"));
+        assert!(report.contains("broken"));
+        assert!(report.contains("## No Agents"));
+        assert!(report.contains("lonely"));
+    }
+
+    fn skill(name: &str, validation: ValidationState, agents: Vec<&str>) -> Skill {
+        Skill {
+            name: name.to_string(),
+            path: PathBuf::from(format!("/tmp/{name}")),
+            scope: Scope::Global,
+            agents: agents.into_iter().map(str::to_string).collect(),
+            tags: vec![],
+            managed: true,
+            mode: SkillMode::Active,
+            validation,
+            manifest_content: Some(format!("# {name}")),
+            drift_state: DriftState::Unknown,
+        }
     }
 }
