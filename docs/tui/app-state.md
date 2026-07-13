@@ -27,6 +27,7 @@ Three ports are generic parameters (monomorphized at compile time); the rest are
 | `view_before_confirm` | `View` | View to return to after confirmation |
 | `list_state` | `ListUiState` | List filter, selection, multi-select |
 | `detail_scroll` | `u16` | Scroll position in detail view |
+| `diff_scroll` | `u16` | Scroll position in diff view |
 | `search_state` | `SearchState` | Query, results, selection |
 | `install_wizard_state` | `InstallWizardState` | Install wizard fields |
 | `pending_action` | `Option<AppAction>` | Action awaiting confirmation |
@@ -53,6 +54,7 @@ pub enum View {
     CreateWizard,   // Creation steps
     Editor,         // Frontmatter editor
     Audit,          // Aggregated audit report
+    Diff,           // Upstream diff of a skill's manifest
 }
 ```
 
@@ -73,6 +75,7 @@ pub fn handle_event(&mut self, event: AppEvent) {
             View::CreateWizard => self.handle_create_wizard_key(key),
             View::Editor       => self.handle_editor_key(key),
             View::Audit        => self.handle_audit_key(key),
+            View::Diff         => self.handle_diff_key(key),
         },
         AppEvent::Resize => { /* no state change, TUI redraws */ },
     }

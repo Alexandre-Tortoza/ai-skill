@@ -16,6 +16,7 @@ Pure domain layer. No I/O dependencies.
 | `SkillToggler` | `enable()`, `disable()`, `adopt()` | Toggle skill state |
 | `ProfileStore` | `list()`, `save()`, `delete()` | Persist named profiles |
 | `DriftChecker` | `check(path)` | Detect upstream drift |
+| `SkillDiffReader` | `read_diff(path)` | Read upstream diff of a skill's manifest |
 | `SkillCreator` | `create(name, agents, tags)` | Scaffold new skill |
 | `SkillUsageReader` | `read_events()` | Read local agent usage history |
 | `SkillWriter` | `write(path, content)` | Write SKILL.md to disk |
@@ -35,6 +36,8 @@ Pure domain layer. No I/O dependencies.
 | `ThemeSlot` | `error`, `warning`, `success`, `accent`, `muted`, `dead`, `stale` |
 | `Theme` | `color(slot)` — resolved semantic palette |
 | `KeyBindings` | `matches(key, action)`, `from_config(map)` |
+| `SkillDiff` | `lines: Vec<DiffLine>` |
+| `DiffLine` | `kind: DiffLineKind`, `text: String` |
 | `Action` | `quit`, `help`, `audit`, `search`, `create`, `profiles`, `bundles`, `budget`, `editor`, `sync`, `ssh`, `adopt`, `toggle_name_only`, `disable`, `enable`, `remove`, `update` |
 
 ### Domain Enums
@@ -44,6 +47,8 @@ Pure domain layer. No I/O dependencies.
 | `Scope` | `Global`, `Project` |
 | `ValidationState` | `Valid`, `BrokenSymlink`, `MissingManifest`, `InvalidFrontmatter { reason }`, `OrphanLock`, `Duplicate { conflicts_with }`, `Disabled` |
 | `DriftState` | `Unknown`, `UpToDate`, `UpdateAvailable { local_hash, upstream_hash }`, `NoGitRepo`, `NoUpstream` |
+| `DiffLineKind` | `Context`, `Add`, `Remove`, `Header` |
+| `DiffError` | `NoGitRepo`, `NoUpstream`, `CommandFailed` |
 | `ProfileOp` | `Install { name }`, `Remove { name }` |
 | `Severity` | `High`, `Medium` |
 | `ScanCategory` | `DangerousShellPattern`, `EnvVarHarvest`, `HardcodedSecret`, `PromptInjection` |
@@ -57,6 +62,7 @@ Pure domain layer. No I/O dependencies.
 | `build_usage_report` | `(events: &[SkillUsageEvent], skill_names: &[String], stale_after_days: u64) -> UsageReport` |
 | `detect_duplicates` | `(skills: &[Skill]) -> Vec<(usize, PathBuf)>` |
 | `diff_profile` | `(current: &[String], desired: &[String]) -> Vec<ProfileOp>` |
+| `parse_diff` | `(raw: &str) -> SkillDiff` |
 | `parse_frontmatter` | `(content: &str) -> Result<SkillMetadata, ParseError>` |
 | `extract_body` | `(content: &str) -> Option<&str>` |
 | `scan_skill` | `(content: &str) -> Vec<ScanFinding>` |
@@ -77,6 +83,7 @@ I/O implementations of core ports.
 | `FsToggler` | `SkillToggler` | Renames directories (`.disabled` suffix, `.ai-skill` marker) |
 | `FsProfileStore` | `ProfileStore` | Reads/writes YAML in `~/.claude/ai-skill/profiles/` |
 | `GitDriftChecker` | `DriftChecker` | Runs `git rev-parse` commands |
+| `GitSkillDiffReader` | `SkillDiffReader` | Shells out to `git diff HEAD..@{u} -- SKILL.md` |
 | `FsSkillCreator` | `SkillCreator` | Creates skill directories with scaffolds |
 | `FsSkillWriter` | `SkillWriter` | Writes SKILL.md files |
 | `FsWatcher` | (none) | Debounced filesystem watcher via `notify` |
@@ -106,7 +113,8 @@ Binary crate — no public API. Internal architecture:
 - **`ui`** module — submodules, one per panel/widget, plus:
   - **`theme`** — `Theme` (semantic colour slots) and `parse_color` for customizing the palette via `config.json`.
   - **`keymap`** — `Action` enum and `KeyBindings` for customizable shortcuts (resolved from `config.json`).
-  - **`i18n`** — `Locale` (en / pt-BR) and `I18n` for localized UI strings, resolved from `config.json` `locale`. `I18n::from_config(None)` falls back to English.
+   - **`i18n`** — `Locale` (en / pt-BR) and `I18n` for localized UI strings, resolved from `config.json` `locale`. `I18n::from_config(None)` falls back to English.
+   - **`diff_panel`** — `render_diff_panel(...)`: color-coded renderer for a skill's upstream diff (`SkillDiff`), reached from the detail view via `d` when an update is available.
 
 The binary entry point in `main.rs` wires real adapters and runs the ratatui event loop.
 

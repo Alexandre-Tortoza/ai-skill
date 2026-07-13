@@ -16,6 +16,7 @@ pub mod fs_toggler;
 pub mod fs_usage_history;
 pub mod fs_watcher;
 pub mod git_drift_checker;
+pub mod git_skill_diff;
 pub mod git_skill_sync;
 pub mod import_chain;
 pub mod npx_catalog_gateway;
@@ -46,6 +47,8 @@ pub use fs_usage_history::{FsUsageHistoryReader, UsageHistoryError};
 pub use fs_watcher::FsWatcher;
 /// Adapter that checks Git drift by comparing local HEAD with `@{u}`.
 pub use git_drift_checker::GitDriftChecker;
+/// Adapter that reads upstream diffs via `git diff HEAD..@{u} -- SKILL.md`.
+pub use git_skill_diff::GitSkillDiffReader;
 /// Adapter that manages a git repository for skill sync.
 pub use git_skill_sync::{GitSkillSync, GitSyncError};
 /// Adapter that shells out to `npx skills add|remove|update`.

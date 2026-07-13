@@ -74,7 +74,9 @@ pub fn render_detail_panel(
         _ => Line::raw(""),
     };
 
-    let meta = Paragraph::new(vec![
+    let has_update = matches!(skill.drift_state, DriftState::UpdateAvailable { .. });
+
+    let mut meta_lines = vec![
         Line::from(vec![
             Span::styled(
                 "scope:      ",
@@ -136,7 +138,11 @@ pub fn render_detail_panel(
             Span::raw("  [o] toggle"),
         ]),
         drift_line,
-    ]);
+    ];
+    if has_update {
+        meta_lines.push(Line::from(Span::raw("  [d] diff upstream")));
+    }
+    let meta = Paragraph::new(meta_lines);
     frame.render_widget(meta, chunks[0]);
 
     // Body section

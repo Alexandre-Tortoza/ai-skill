@@ -119,7 +119,7 @@ Unrecognized or missing values fall back to English. The `--json` and
 
 ## Views (Modes)
 
-The TUI has 11 views, each accessed by a key binding. The status bar at the bottom shows context-sensitive hints for the active view.
+The TUI has 12 views, each accessed by a key binding. The status bar at the bottom shows context-sensitive hints for the active view.
 
 ### List View (default)
 
@@ -161,7 +161,20 @@ Shows full metadata and the rendered `SKILL.md` body for the selected skill.
 | Key | Action |
 |---|---|
 | `↑` / `↓` | Scroll content |
+| `d` | Open the upstream diff viewer (only when an update is available) |
 | `Esc` / `q` | Return to list |
+
+### Diff View
+
+Shows the upstream diff of the skill's `SKILL.md` (`git diff HEAD..@{u}`), color-coded by
+line kind (additions in green, removals in red, headers accented). Requires the skill to be
+a Git checkout with a configured upstream tracking branch.
+
+| Key | Action |
+|---|---|
+| `↑` / `↓` / `j` / `k` | Scroll the diff |
+| `Esc` | Return to detail view |
+| `q` | Quit application |
 
 ### Search View
 

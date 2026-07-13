@@ -42,7 +42,7 @@ The trait is object-safe. The `GitDriftChecker` adapter runs git commands to com
 
 - Requires the skill directory to be inside a git repository with a configured remote
 - Detects any difference, not semantic version changes
-- Does not show what changed (no diff viewer — planned for future)
+- The upstream diff of what changed is available via the `SkillDiffReader` port (see [Upstream Diff](../api.md))
 
 ---
 

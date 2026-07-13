@@ -6,6 +6,7 @@ pub mod bundles_panel;
 pub mod confirm_panel;
 pub mod create_wizard;
 pub mod detail_panel;
+pub mod diff_panel;
 pub mod editor_panel;
 pub mod help_overlay;
 pub mod import_chain_panel;

@@ -10,6 +10,7 @@ pub mod bundle;
 pub mod catalog;
 pub mod config;
 pub mod creator;
+pub mod diff;
 pub mod drift;
 pub mod duplicate_detector;
 pub mod external_scanner;
@@ -43,6 +44,8 @@ pub use catalog::{AnyCatalogGateway, CatalogEntry};
 pub use config::{CONFIG_DIR, CONFIG_FILE, ConfigStore, TuiConfig};
 /// Ports and helpers for creating and editing skill manifests.
 pub use creator::{SkillCreator, SkillWriter, apply_edit, scaffold_skill};
+/// Upstream diff model and reader port for visualizing skill changes.
+pub use diff::{DiffError, DiffLine, DiffLineKind, SkillDiff, SkillDiffReader, parse_diff};
 /// Port and state enum for detecting upstream drift.
 pub use drift::{DriftChecker, DriftState};
 /// Case-insensitive duplicate name detection across a skill slice.

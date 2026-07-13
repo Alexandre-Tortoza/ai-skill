@@ -36,6 +36,8 @@ pub enum View {
     SshRemote,
     Bundles,
     Sync,
+    /// Upstream diff of a skill with an available update.
+    Diff,
 }
 
 /// Steps in the create-skill wizard.
@@ -260,6 +262,7 @@ pub struct App<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> {
     pub view_before_confirm: View,
     pub list_state: ListUiState,
     pub detail_scroll: u16,
+    pub diff_scroll: u16,
     pub search_state: SearchState,
     pub install_wizard_state: InstallWizardState,
     pub pending_action: Option<AppAction>,
@@ -329,6 +332,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             view_before_confirm: View::List,
             list_state: ListUiState::new(),
             detail_scroll: 0,
+            diff_scroll: 0,
             search_state: SearchState::default(),
             install_wizard_state: InstallWizardState::default(),
             pending_action: None,
@@ -443,6 +447,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 View::SshRemote => self.handle_ssh_key(key),
                 View::Bundles => self.handle_bundles_key(key),
                 View::Sync => self.handle_sync_key(key),
+                View::Diff => self.handle_diff_key(key),
             },
             AppEvent::Resize => {}
         }
@@ -763,6 +768,32 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     self.import_chain_result = trace_import_chain(&skill.path).ok();
                     self.view = View::ImportChain;
                 }
+            }
+            KeyCode::Char('d') if key.modifiers == KeyModifiers::NONE => {
+                if let Some(skill) = self.selected_skill()
+                    && matches!(
+                        skill.drift_state,
+                        ai_skill_core::DriftState::UpdateAvailable { .. }
+                    )
+                {
+                    self.diff_scroll = 0;
+                    self.view = View::Diff;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_diff_key(&mut self, key: crossterm::event::KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.view = View::Detail;
+            }
+            KeyCode::Down | KeyCode::Char('j') if key.modifiers == KeyModifiers::NONE => {
+                self.diff_scroll += 1;
+            }
+            KeyCode::Up | KeyCode::Char('k') if key.modifiers == KeyModifiers::NONE => {
+                self.diff_scroll = self.diff_scroll.saturating_sub(1);
             }
             _ => {}
         }
@@ -2014,6 +2045,44 @@ mod tests {
         app.view = View::Detail;
         app.handle_event(key(KeyCode::Char('k')));
         assert_eq!(app.detail_scroll, 0);
+    }
+
+    // ── diff view ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn d_in_detail_opens_diff_when_update_available() {
+        let mut app = make_app(make_skills(1));
+        app.view = View::Detail;
+        app.all_skills[0].drift_state = ai_skill_core::DriftState::UpdateAvailable {
+            local_hash: "abc".into(),
+            upstream_hash: "def".into(),
+        };
+        app.handle_event(key(KeyCode::Char('d')));
+        assert_eq!(app.view, View::Diff);
+    }
+
+    #[test]
+    fn d_in_detail_does_not_open_diff_without_update() {
+        let mut app = make_app(make_skills(1));
+        app.view = View::Detail;
+        app.handle_event(key(KeyCode::Char('d')));
+        assert_eq!(app.view, View::Detail);
+    }
+
+    #[test]
+    fn esc_in_diff_returns_to_detail() {
+        let mut app = make_app(make_skills(1));
+        app.view = View::Diff;
+        app.handle_event(key(KeyCode::Esc));
+        assert_eq!(app.view, View::Detail);
+    }
+
+    #[test]
+    fn j_in_diff_increments_scroll() {
+        let mut app = make_app(make_skills(1));
+        app.view = View::Diff;
+        app.handle_event(key(KeyCode::Char('j')));
+        assert_eq!(app.diff_scroll, 1);
     }
 
     // ── search ────────────────────────────────────────────────────────────────

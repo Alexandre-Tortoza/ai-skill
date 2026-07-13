@@ -65,8 +65,8 @@ Legenda: **[MUST]** ataca dor top da pesquisa · **[DEP]** tem dependência bloq
       Paths custom de agentes, tema, keymap, proxy — em `~/.config/ai-skill/`. (Hoje só temos cores/responsividade como débito transversal.)
 - [ ] **Temas (base16) + keymap customizável**
       Definir cores por slot semântico; permitir rebind de teclas estilo Atuin.
-- [ ] **Diff viewer visual** **[R]**
-      Ver diff upstream com stage de hunks estilo lazygit, não só link externo.
+- [x] **Diff viewer visual** **[R]**
+      Ver diff upstream com stage de hunks estilo lazygit, não só link externo. (Implementado: `SkillDiffReader`/`parse_diff` em core, `GitSkillDiffReader` em adapters, `View::Diff` na TUI aberto por `d` no detail quando há update, `diff_panel` colorido.)
 - [x] **i18n da TUI**
       Começar por pt-BR + en. (Implementado: módulo `tui/src/i18n.rs`, `locale` em `TuiConfig`, pt-BR + en em painéis de auditoria, scan, settings, status bar e help overlay.)
 

@@ -1,12 +1,11 @@
 ---
 source: tui/src/ui/status_bar.rs
-assertion_line: 103
 expression: terminal.backend().buffer().clone()
 ---
 Buffer {
     area: Rect { x: 0, y: 0, width: 84, height: 1 },
     content: [
-        "j/k scroll  Esc back  q quit                                                        ",
+        "j/k scroll  d diff  Esc back  q quit                                                ",
     ],
     styles: [
         x: 0, y: 0, fg: Black, bg: DarkGray, underline: Reset, modifier: NONE,

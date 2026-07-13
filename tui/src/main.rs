@@ -12,14 +12,14 @@ use ui::theme::Theme;
 use ai_skill_adapters::{
     CliInstaller, CompositeCatalogGateway, FsBundleStore, FsConfigStore, FsPluginDiscoverer,
     FsProfileStore, FsSettingsStore, FsSkillCreator, FsSkillRepository, FsSkillWriter, FsToggler,
-    FsUsageHistoryReader, FsWatcher, GitDriftChecker, GitSkillSync, NpxCatalogGateway,
-    SshCommandConnector,
+    FsUsageHistoryReader, FsWatcher, GitDriftChecker, GitSkillDiffReader, GitSkillSync,
+    NpxCatalogGateway, SshCommandConnector,
 };
 use ai_skill_core::{
     BudgetWarning, ConfigStore, DriftChecker, NoopExternalScanner, NoopSignatureVerifier,
-    PluginMarketplaceDiscovery, RemoteHost, Scope, Skill, SkillMode, SkillRepository,
-    SkillUsageReader, ValidationState, audit_skills, build_usage_report, calculate_budget,
-    classify_budget,
+    PluginMarketplaceDiscovery, RemoteHost, Scope, Skill, SkillDiffReader, SkillMode,
+    SkillRepository, SkillUsageReader, ValidationState, audit_skills, build_usage_report,
+    calculate_budget, classify_budget,
 };
 
 use app::{App, View};
@@ -90,6 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(false);
 
     let usage_reader = FsUsageHistoryReader::from_env();
+    let diff_reader = GitSkillDiffReader::new();
     let mut usage_report = build_usage_report(
         &usage_reader.read_events().unwrap_or_default(),
         &skill_names(&skills),
@@ -236,6 +237,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 View::Budget => {
                     ui::budget_panel::render_budget_panel(&app.budget, main_area, f);
+                }
+                View::Diff => {
+                    if let Some(skill) = app.selected_skill() {
+                        let diff = diff_reader.read_diff(&skill.path);
+                        ui::diff_panel::render_diff_panel(
+                            skill,
+                            &diff,
+                            app.diff_scroll,
+                            &theme,
+                            main_area,
+                            f,
+                            &i18n,
+                        );
+                    }
                 }
                 View::Settings => {
                     let chunks =

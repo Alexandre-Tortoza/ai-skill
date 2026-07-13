@@ -1,6 +1,6 @@
 # TUI Views
 
-The TUI has 11 views. Each is rendered by a dedicated panel function.
+The TUI has 12 views. Each is rendered by a dedicated panel function.
 
 ## List View (default)
 
@@ -104,28 +104,37 @@ Summary line + 4 sections:
 | No Agents | Yellow | Valid/Disabled with empty agents |
 | Updates | Green | DriftState::UpdateAvailable |
 
+## Diff View
+
+**Panel:** `diff_panel::render_diff_panel`
+
+Color-coded upstream diff of a skill's `SKILL.md` (`git diff HEAD..@{u}`), shown only when an
+update is available (opened from the Detail view via `d`). Additions are green, removals red,
+headers accented. Requires the skill to be a Git checkout with an upstream tracking branch.
+
 ## Key Bindings by View
 
-| Key | List | Detail | Search | Help | Confirm | Wizard | Scan | Profiles | Create | Editor | Audit |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| `↑`/`↓` | Navigate | Scroll | Navigate | — | — | — | Scroll | Navigate | — | — | Scroll |
-| `Enter` | Detail | — | Wizard | — | Confirm | Next | Proceed | Activate | Next | Save | — |
-| `Esc` | Quit | Back | Back | Close | Cancel | Cancel | Cancel | Back | Cancel | Cancel | Back |
-| `q` | Quit | Back | — | Close | — | — | — | — | — | — | — |
-| `/` | Search | — | — | — | — | — | — | — | — | — | — |
-| `Tab` | Filter | — | — | — | — | Scope | — | — | Step | Field | — |
-| `Space` | Select | — | — | — | — | Agent | — | — | — | — | — |
-| `t` | Tag | — | — | — | — | — | — | — | — | — | — |
-| `s` | Scan | — | — | — | — | — | — | — | — | — | — |
-| `p` | Profiles | — | — | — | — | — | — | — | — | — | — |
-| `a` | Audit | — | — | — | — | — | — | — | — | — | — |
-| `c` | Create | — | — | — | — | — | — | Create | — | — | — |
-| `e` | Edit | — | — | — | — | — | — | — | — | — | — |
-| `d` | Disable | — | — | — | — | — | — | Delete | — | — | — |
-| `r` | Remove | — | — | — | — | — | — | — | — | — | — |
-| `u` | Update | — | — | — | — | — | — | — | — | — | — |
-| `?` | Help | — | — | Close | — | — | — | — | — | — | — |
-| `y` / `n` | — | — | — | — | Yes/No | — | — | — | — | — | — |
+| Key | List | Detail | Search | Help | Confirm | Wizard | Scan | Profiles | Create | Editor | Audit | Diff |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `↑`/`↓` | Navigate | Scroll | Navigate | — | — | — | Scroll | Navigate | — | — | Scroll | Scroll |
+| `j`/`k` | — | — | — | — | — | — | — | — | — | — | — | Scroll |
+| `Enter` | Detail | — | Wizard | — | Confirm | Next | Proceed | Activate | Next | Save | — | — |
+| `Esc` | Quit | Back | Back | Close | Cancel | Cancel | Cancel | Back | Cancel | Cancel | Back | Back |
+| `q` | Quit | Back | — | Close | — | — | — | — | — | — | — | Quit |
+| `/` | Search | — | — | — | — | — | — | — | — | — | — | — |
+| `Tab` | Filter | — | — | — | — | Scope | — | — | Step | Field | — | — |
+| `Space` | Select | — | — | — | — | Agent | — | — | — | — | — | — |
+| `t` | Tag | — | — | — | — | — | — | — | — | — | — | — |
+| `s` | Scan | — | — | — | — | — | — | — | — | — | — | — |
+| `p` | Profiles | — | — | — | — | — | — | — | — | — | — | — |
+| `a` | Audit | — | — | — | — | — | — | — | — | — | — | — |
+| `c` | Create | — | — | — | — | — | — | Create | — | — | — | — |
+| `e` | Edit | — | — | — | — | — | — | — | — | — | — | — |
+| `d` | Disable | Diff | — | — | — | — | — | Delete | — | — | — | — |
+| `r` | Remove | — | — | — | — | — | — | — | — | — | — | — |
+| `u` | Update | — | — | — | — | — | — | — | — | — | — | — |
+| `?` | Help | — | — | Close | — | — | — | — | — | — | — | — |
+| `y` / `n` | — | — | — | — | Yes/No | — | — | — | — | — | — | — |
 
 ---
 

@@ -9,6 +9,7 @@
 //! active locale.
 
 use crate::app::View;
+use ai_skill_core::DiffError;
 
 /// Supported UI locales.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -78,7 +79,7 @@ impl I18n {
             (Locale::En, View::List) => {
                 "j/k  d  e  n  r  u  a  c  A aud  B bud  S set  s srch  F1-F4  ? quit"
             }
-            (Locale::En, View::Detail) => "j/k scroll  Esc back  q quit",
+            (Locale::En, View::Detail) => "j/k scroll  d diff  Esc back  q quit",
             (Locale::En, View::Search) => "type search  j/k move  Enter install  Esc back",
             (Locale::En, View::Help) => "Esc close",
             (Locale::En, View::Confirm) => "y confirm  n / Esc cancel",
@@ -102,10 +103,11 @@ impl I18n {
             (Locale::En, View::Sync) => {
                 "j/k move  Enter init/snap  r rstor  R remote  p push  P pull  Esc back"
             }
+            (Locale::En, View::Diff) => "j/k scroll  Esc back",
             (Locale::PtBr, View::List) => {
                 "j/k  d  e  n  r  u  a  c  A aud  B bud  S cfg  s busca  F1-F4  ? sair"
             }
-            (Locale::PtBr, View::Detail) => "j/k rolar  Esc voltar  q sair",
+            (Locale::PtBr, View::Detail) => "j/k rolar  d diff  Esc voltar  q sair",
             (Locale::PtBr, View::Search) => "digite busca  j/k mover  Enter instalar  Esc voltar",
             (Locale::PtBr, View::Help) => "Esc fechar",
             (Locale::PtBr, View::Confirm) => "s confirmar  n / Esc cancelar",
@@ -131,6 +133,7 @@ impl I18n {
             (Locale::PtBr, View::Sync) => {
                 "j/k mover  Enter init/snap  r restaurar  R remoto  p push  P pull  Esc voltar"
             }
+            (Locale::PtBr, View::Diff) => "j/k rolar  Esc voltar",
         }
     }
 
@@ -400,6 +403,34 @@ impl I18n {
         match self.locale {
             Locale::En => "  [o] toggle  [d] remove",
             Locale::PtBr => "  [o] alternar  [d] remover",
+        }
+    }
+
+    // --- Diff viewer ----------------------------------------------------
+
+    pub fn diff_no_changes(&self) -> &'static str {
+        match self.locale {
+            Locale::En => "(no upstream changes)",
+            Locale::PtBr => "(sem alterações no upstream)",
+        }
+    }
+
+    pub fn diff_error(&self, err: &DiffError) -> String {
+        match (self.locale, err) {
+            (Locale::En, DiffError::NoGitRepo) => {
+                "Not a Git repository — cannot show upstream diff.".to_string()
+            }
+            (Locale::En, DiffError::NoUpstream) => {
+                "No upstream configured — cannot show upstream diff.".to_string()
+            }
+            (Locale::En, DiffError::CommandFailed) => "Failed to run git diff.".to_string(),
+            (Locale::PtBr, DiffError::NoGitRepo) => {
+                "Não é um repositório Git — não é possível mostrar o diff.".to_string()
+            }
+            (Locale::PtBr, DiffError::NoUpstream) => {
+                "Sem upstream configurado — não é possível mostrar o diff.".to_string()
+            }
+            (Locale::PtBr, DiffError::CommandFailed) => "Falha ao executar git diff.".to_string(),
         }
     }
 }
