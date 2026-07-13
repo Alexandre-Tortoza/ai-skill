@@ -1,6 +1,6 @@
 //! Terminal event polling and application-level event types.
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{self, Event, KeyEvent};
 use std::time::Duration;
 use thiserror::Error;
 
@@ -30,15 +30,6 @@ pub fn next_event(timeout: Duration) -> Result<Option<AppEvent>, EventError> {
     }
 }
 
-/// True for keys that always quit regardless of view (q, Ctrl-C).
-/// Esc is intentionally excluded — it is handled contextually per view.
-pub fn is_quit(key: &KeyEvent) -> bool {
-    matches!(
-        (key.code, key.modifiers),
-        (KeyCode::Char('q'), KeyModifiers::NONE) | (KeyCode::Char('c'), KeyModifiers::CONTROL)
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -51,43 +42,6 @@ mod tests {
             kind: KeyEventKind::Press,
             state: KeyEventState::NONE,
         }
-    }
-
-    fn key_with(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
-        KeyEvent {
-            code,
-            modifiers,
-            kind: KeyEventKind::Press,
-            state: KeyEventState::NONE,
-        }
-    }
-
-    #[test]
-    fn is_quit_lowercase_q() {
-        assert!(is_quit(&key(KeyCode::Char('q'))));
-    }
-
-    #[test]
-    fn is_quit_ctrl_c() {
-        assert!(is_quit(&key_with(
-            KeyCode::Char('c'),
-            KeyModifiers::CONTROL
-        )));
-    }
-
-    #[test]
-    fn is_quit_uppercase_q_is_not_quit() {
-        assert!(!is_quit(&key_with(KeyCode::Char('Q'), KeyModifiers::SHIFT)));
-    }
-
-    #[test]
-    fn is_quit_enter_is_not_quit() {
-        assert!(!is_quit(&key(KeyCode::Enter)));
-    }
-
-    #[test]
-    fn is_quit_q_with_shift_is_not_quit() {
-        assert!(!is_quit(&key_with(KeyCode::Char('q'), KeyModifiers::SHIFT)));
     }
 
     #[test]

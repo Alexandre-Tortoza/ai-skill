@@ -53,6 +53,54 @@ The threshold is set via `stale_after_days` in `~/.config/ai-skill/config.json`:
 
 The audit panel (key `a`) shows `dead: N` and `stale: N` in its summary, with dedicated **Dead** and **Stale** sections when any are found. The same data is included in the exported `--json audit` and `--markdown audit` reports as `usage_dead`, `usage_stale` and `stale_after_days`.
 
+## Customization
+
+`ai-skill` reads `~/.config/ai-skill/config.json` for appearance and key bindings.
+
+### Theme (semantic colors)
+
+Colors are resolved from semantic slots, so you can recolor the UI without
+touching code. Supported slot keys: `error`, `warning`, `success`, `accent`,
+`muted`, `dead`, `stale`. Values are color names (`red`, `blue`, `darkgray`,
+…) or `#rrggbb` hex. Unknown keys and invalid colors are ignored.
+
+```json
+{
+  "theme": {
+    "error": "red",
+    "warning": "yellow",
+    "success": "green",
+    "accent": "cyan",
+    "muted": "dark_gray",
+    "dead": "magenta",
+    "stale": "yellow"
+  }
+}
+```
+
+### Key bindings
+
+The main navigation shortcuts are customizable. Action keys:
+`quit`, `help`, `audit`, `search`, `create`, `profiles`, `bundles`, `budget`,
+`editor`, `sync`, `ssh`, `adopt`, `toggle_name_only`, `disable`, `enable`,
+`remove`, `update`. Key syntax: a single character (`a`, `?`, `/`), function
+keys (`F1`–`F12`), or `ctrl+<letter>`. Letter bindings are matched
+case-insensitively and ignore Shift. `quit` always also accepts `Ctrl-C`.
+
+```json
+{
+  "keymap": {
+    "audit": "A",
+    "search": "s",
+    "create": "c",
+    "help": "?"
+  }
+}
+```
+
+Wizards and contextual keys (navigation, confirm/cancel) remain on their
+built-in bindings in this first slice.
+
 ## Views (Modes)
 
 The TUI has 11 views, each accessed by a key binding. The status bar at the bottom shows context-sensitive hints for the active view.

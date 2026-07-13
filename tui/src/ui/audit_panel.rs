@@ -10,9 +10,16 @@ use ratatui::{
 };
 
 use super::style_helpers::fg;
+use super::theme::{Theme, ThemeSlot};
 
 /// Renders the audit report grouped by health category, including usage.
-pub fn render_audit_panel(skills: &[Skill], usage: &UsageReport, area: Rect, frame: &mut Frame) {
+pub fn render_audit_panel(
+    skills: &[Skill],
+    usage: &UsageReport,
+    theme: &Theme,
+    area: Rect,
+    frame: &mut Frame,
+) {
     let report = audit_skills(skills);
 
     let body = Layout::vertical([Constraint::Length(3), Constraint::Min(0)]).split(area);
@@ -48,25 +55,31 @@ pub fn render_audit_panel(skills: &[Skill], usage: &UsageReport, area: Rect, fra
     ])
     .split(top);
 
-    render_section("Broken", &report.broken, Color::Red, panels[0], frame);
+    render_section(
+        "Broken",
+        &report.broken,
+        theme.color(ThemeSlot::Error),
+        panels[0],
+        frame,
+    );
     render_section(
         "Duplicates",
         &report.duplicates,
-        Color::Cyan,
+        theme.color(ThemeSlot::Accent),
         panels[1],
         frame,
     );
     render_section(
         "No Agents",
         &report.no_agents,
-        Color::Yellow,
+        theme.color(ThemeSlot::Warning),
         panels[2],
         frame,
     );
     render_section(
         "Updates",
         &report.update_available,
-        Color::Green,
+        theme.color(ThemeSlot::Success),
         panels[3],
         frame,
     );
@@ -78,14 +91,14 @@ pub fn render_audit_panel(skills: &[Skill], usage: &UsageReport, area: Rect, fra
         render_names(
             &format!("Dead (>{}d)", usage.stale_after_days),
             &usage.dead,
-            Color::Magenta,
+            theme.color(ThemeSlot::Dead),
             usage_panels[0],
             frame,
         );
         render_names(
             &format!("Stale (>{}d)", usage.stale_after_days),
             &usage.stale,
-            Color::Yellow,
+            theme.color(ThemeSlot::Stale),
             usage_panels[1],
             frame,
         );
@@ -148,7 +161,7 @@ mod tests {
         let backend = TestBackend::new(80, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_audit_panel(skills, usage, f.area(), f))
+            .draw(|f| render_audit_panel(skills, usage, &Theme::default(), f.area(), f))
             .unwrap();
         terminal
             .backend()
@@ -193,7 +206,15 @@ mod tests {
         let backend = TestBackend::new(80, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_audit_panel(&skills, &UsageReport::default(), f.area(), f))
+            .draw(|f| {
+                render_audit_panel(
+                    &skills,
+                    &UsageReport::default(),
+                    &Theme::default(),
+                    f.area(),
+                    f,
+                )
+            })
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
     }

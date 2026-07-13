@@ -5,6 +5,8 @@ mod event;
 mod terminal;
 mod ui;
 
+use ui::theme::Theme;
+
 use ai_skill_adapters::{
     CliInstaller, CompositeCatalogGateway, FsBundleStore, FsConfigStore, FsPluginDiscoverer,
     FsProfileStore, FsSettingsStore, FsSkillCreator, FsSkillRepository, FsSkillWriter, FsToggler,
@@ -50,6 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_store = config_store_from_env();
     let config = config_store.read().unwrap_or_default();
     let stale_after_days = config.stale_after_days;
+    let theme = Theme::from_config(&config.theme);
 
     let mut repo = FsSkillRepository::from_env()?;
     repo.add_custom_paths(config.custom_agent_paths.clone());
@@ -194,7 +197,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                 }
                 View::ScanReport => {
-                    ui::scan_report::render_scan_report(&app.scan_findings, main_area, f);
+                    ui::scan_report::render_scan_report(&app.scan_findings, &theme, main_area, f);
                 }
                 View::Profiles => {
                     ui::profiles_panel::render_profiles_panel(
@@ -216,6 +219,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ui::audit_panel::render_audit_panel(
                         &app.all_skills,
                         &usage_report,
+                        &theme,
                         main_area,
                         f,
                     );

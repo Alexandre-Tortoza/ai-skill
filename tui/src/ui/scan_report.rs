@@ -4,15 +4,16 @@ use ai_skill_core::{ScanFinding, Severity};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
-    style::{Color, Modifier},
+    style::Modifier,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
 };
 
 use super::style_helpers::fg;
+use super::theme::{Theme, ThemeSlot};
 
 /// Renders an overlay listing security scan findings before install confirmation.
-pub fn render_scan_report(findings: &[ScanFinding], area: Rect, frame: &mut Frame) {
+pub fn render_scan_report(findings: &[ScanFinding], theme: &Theme, area: Rect, frame: &mut Frame) {
     let popup_width = area.width * 3 / 4;
     let popup_height = (findings.len() as u16 + 6).min(area.height - 4);
     let x = area.x + (area.width - popup_width) / 2;
@@ -24,7 +25,7 @@ pub fn render_scan_report(findings: &[ScanFinding], area: Rect, frame: &mut Fram
     let block = Block::default()
         .title(" Security Findings ")
         .borders(Borders::ALL)
-        .border_style(fg(Color::Red));
+        .border_style(fg(theme.color(ThemeSlot::Error)));
 
     let inner = block.inner(popup_area);
     frame.render_widget(block, popup_area);
@@ -39,8 +40,8 @@ pub fn render_scan_report(findings: &[ScanFinding], area: Rect, frame: &mut Fram
                 Severity::Medium => "[MED] ",
             };
             let color = match f.severity {
-                Severity::High => Color::Red,
-                Severity::Medium => Color::Yellow,
+                Severity::High => theme.color(ThemeSlot::Error),
+                Severity::Medium => theme.color(ThemeSlot::Warning),
             };
             let category = format!("{:?}", f.category);
             let text = format!(
@@ -55,7 +56,7 @@ pub fn render_scan_report(findings: &[ScanFinding], area: Rect, frame: &mut Fram
     frame.render_widget(list, chunks[0]);
 
     let footer = Paragraph::new("Enter to install anyway  |  Esc to cancel")
-        .style(fg(Color::DarkGray).add_modifier(Modifier::ITALIC));
+        .style(fg(theme.color(ThemeSlot::Muted)).add_modifier(Modifier::ITALIC));
     frame.render_widget(footer, chunks[1]);
 }
 
@@ -80,7 +81,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         let findings = vec![make_finding(Severity::High)];
         terminal
-            .draw(|f| render_scan_report(&findings, f.area(), f))
+            .draw(|f| render_scan_report(&findings, &Theme::default(), f.area(), f))
             .unwrap();
     }
 
@@ -89,7 +90,7 @@ mod tests {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_scan_report(&[], f.area(), f))
+            .draw(|f| render_scan_report(&[], &Theme::default(), f.area(), f))
             .unwrap();
     }
 
@@ -99,7 +100,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         let findings = vec![make_finding(Severity::High)];
         terminal
-            .draw(|f| render_scan_report(&findings, f.area(), f))
+            .draw(|f| render_scan_report(&findings, &Theme::default(), f.area(), f))
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
     }

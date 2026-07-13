@@ -1,5 +1,6 @@
 //! Application state, view transitions, and event handling.
 
+use crate::ui::keymap::{Action, KeyBindings};
 use ai_skill_adapters::ImportChainResult;
 use ai_skill_core::{
     AnyCatalogGateway, Bundle, BundleStore, CatalogEntry, ConfigStore, ConnectionStatus,
@@ -11,7 +12,7 @@ use ai_skill_core::{
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::path::PathBuf;
 
-use crate::event::{AppEvent, is_quit};
+use crate::event::AppEvent;
 use crate::ui::settings_panel::{ConfigState, SettingsState};
 
 /// The active screen (or overlay) in the TUI.
@@ -282,6 +283,8 @@ pub struct App<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> {
     pub config_store: Box<dyn ConfigStore>,
     pub config: TuiConfig,
     pub config_state: ConfigState,
+    /// Resolved key bindings, customizable via `config.keymap`.
+    pub key_bindings: KeyBindings,
     pub external_scanner: Box<dyn ExternalScanner>,
     #[allow(dead_code)]
     pub signature_verifier: Box<dyn SignatureVerifier>,
@@ -318,6 +321,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
     ) -> Self {
         let profiles = profile_store.list().unwrap_or_default();
         let budget = calculate_budget(&all_skills);
+        let key_bindings = KeyBindings::from_config(&config.keymap);
         Self {
             all_skills,
             budget,
@@ -350,6 +354,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             config_store,
             config,
             config_state: super::ui::settings_panel::ConfigState::default(),
+            key_bindings,
             settings_state: SettingsState::default(),
             external_scanner,
             signature_verifier,
@@ -417,7 +422,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
 
     pub fn handle_event(&mut self, event: AppEvent) {
         match event {
-            AppEvent::Key(key) if is_quit(&key) => {
+            AppEvent::Key(key) if self.key_bindings.matches(&key, Action::Quit) => {
                 self.should_quit = true;
             }
             AppEvent::Key(key) => match self.view.clone() {
@@ -575,7 +580,10 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     self.list_state.selected_items.push(idx);
                 }
             }
-            KeyCode::Char('d') if key.modifiers == KeyModifiers::NONE => {
+            KeyCode::Char(_)
+                if self.key_bindings.matches(&key, Action::Disable)
+                    && key.modifiers == KeyModifiers::NONE =>
+            {
                 if let Some(skill) = self.selected_skill() {
                     let path = skill.path.clone();
                     self.pending_action = Some(AppAction::Disable { path });
@@ -583,8 +591,9 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     self.view = View::Confirm;
                 }
             }
-            KeyCode::Char('e')
-                if key.modifiers == KeyModifiers::NONE
+            KeyCode::Char(_)
+                if self.key_bindings.matches(&key, Action::Enable)
+                    && key.modifiers == KeyModifiers::NONE
                     && self
                         .selected_skill()
                         .map(|s| s.mode == SkillMode::Disabled)
@@ -597,7 +606,10 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     self.view = View::Confirm;
                 }
             }
-            KeyCode::Char('r') if key.modifiers == KeyModifiers::NONE => {
+            KeyCode::Char(_)
+                if self.key_bindings.matches(&key, Action::Remove)
+                    && key.modifiers == KeyModifiers::NONE =>
+            {
                 if let Some(skill) = self.selected_skill() {
                     let path = skill.path.clone();
                     self.pending_action = Some(AppAction::Remove { path });
@@ -605,7 +617,10 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     self.view = View::Confirm;
                 }
             }
-            KeyCode::Char('u') if key.modifiers == KeyModifiers::NONE => {
+            KeyCode::Char(_)
+                if self.key_bindings.matches(&key, Action::Update)
+                    && key.modifiers == KeyModifiers::NONE =>
+            {
                 if let Some(skill) = self.selected_skill() {
                     let path = skill.path.clone();
                     self.pending_action = Some(AppAction::Update { path });
@@ -613,15 +628,19 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     self.view = View::Confirm;
                 }
             }
-            KeyCode::Char('n') if key.modifiers == KeyModifiers::NONE => {
+            KeyCode::Char(_)
+                if self.key_bindings.matches(&key, Action::ToggleNameOnly)
+                    && key.modifiers == KeyModifiers::NONE =>
+            {
                 if let Some(skill) = self.selected_skill() {
                     let path = skill.path.clone();
                     self.pending_action = Some(AppAction::ToggleNameOnly { path });
                     self.execute_pending_action();
                 }
             }
-            KeyCode::Char('a')
-                if key.modifiers == KeyModifiers::NONE
+            KeyCode::Char(_)
+                if self.key_bindings.matches(&key, Action::Adopt)
+                    && key.modifiers == KeyModifiers::NONE
                     && self.selected_skill().map(|s| !s.managed).unwrap_or(false) =>
             {
                 if let Some(skill) = self.selected_skill() {
@@ -630,11 +649,17 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     self.execute_pending_action();
                 }
             }
-            KeyCode::Char('s') if key.modifiers == KeyModifiers::NONE => {
+            KeyCode::Char(_)
+                if self.key_bindings.matches(&key, Action::Search)
+                    && key.modifiers == KeyModifiers::NONE =>
+            {
                 self.search_state = SearchState::default();
                 self.view = View::Search;
             }
-            KeyCode::Char('p') if key.modifiers == KeyModifiers::NONE => {
+            KeyCode::Char(_)
+                if self.key_bindings.matches(&key, Action::Profiles)
+                    && key.modifiers == KeyModifiers::NONE =>
+            {
                 let profiles = self.profile_store.list().unwrap_or_default();
                 self.profile_state.profiles = profiles;
                 self.profile_state.selected_index = 0;
@@ -642,10 +667,16 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 self.profile_state.new_name_input = String::new();
                 self.view = View::Profiles;
             }
-            KeyCode::Char('?') if key.modifiers == KeyModifiers::NONE => {
+            KeyCode::Char(_)
+                if self.key_bindings.matches(&key, Action::Help)
+                    && key.modifiers == KeyModifiers::NONE =>
+            {
                 self.view = View::Help;
             }
-            KeyCode::Char('b') if key.modifiers == KeyModifiers::NONE => {
+            KeyCode::Char(_)
+                if self.key_bindings.matches(&key, Action::Bundles)
+                    && key.modifiers == KeyModifiers::NONE =>
+            {
                 let bundles = self.bundle_store.list().unwrap_or_default();
                 self.bundle_state = BundleState {
                     bundles,
@@ -653,12 +684,16 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 };
                 self.view = View::Bundles;
             }
-            KeyCode::Char('c') if key.modifiers == KeyModifiers::NONE => {
+            KeyCode::Char(_)
+                if self.key_bindings.matches(&key, Action::Create)
+                    && key.modifiers == KeyModifiers::NONE =>
+            {
                 self.create_wizard_state = CreateWizardState::default();
                 self.view = View::CreateWizard;
             }
-            KeyCode::Char('e')
-                if key.modifiers == KeyModifiers::NONE
+            KeyCode::Char(_)
+                if self.key_bindings.matches(&key, Action::Editor)
+                    && key.modifiers == KeyModifiers::NONE
                     && self
                         .selected_skill()
                         .map(|s| s.mode != SkillMode::Disabled)
@@ -686,17 +721,17 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                     self.view = View::Editor;
                 }
             }
-            KeyCode::Char('B') => {
+            KeyCode::Char(_) if self.key_bindings.matches(&key, Action::Budget) => {
                 self.view = View::Budget;
             }
-            KeyCode::Char('A') => {
+            KeyCode::Char(_) if self.key_bindings.matches(&key, Action::Audit) => {
                 self.view = View::Audit;
             }
-            KeyCode::Char('S') => {
+            KeyCode::Char(_) if self.key_bindings.matches(&key, Action::Sync) => {
                 self.refresh_sync_state();
                 self.view = View::Sync;
             }
-            KeyCode::Char('R') => {
+            KeyCode::Char(_) if self.key_bindings.matches(&key, Action::SshRemote) => {
                 self.ssh_state = SshState::default();
                 self.view = View::SshRemote;
             }

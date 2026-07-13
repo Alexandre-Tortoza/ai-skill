@@ -32,6 +32,10 @@ Pure domain layer. No I/O dependencies.
 | `UsageReport` | `records`, `dead`, `stale`, `stale_after_days` |
 | `SkillMetadata` | `name`, `agents`, `tags` |
 | `ScanFinding` | `severity`, `category`, `detail`, `line` |
+| `ThemeSlot` | `error`, `warning`, `success`, `accent`, `muted`, `dead`, `stale` |
+| `Theme` | `color(slot)` — resolved semantic palette |
+| `KeyBindings` | `matches(key, action)`, `from_config(map)` |
+| `Action` | `quit`, `help`, `audit`, `search`, `create`, `profiles`, `bundles`, `budget`, `editor`, `sync`, `ssh`, `adopt`, `toggle_name_only`, `disable`, `enable`, `remove`, `update` |
 
 ### Domain Enums
 
@@ -99,7 +103,9 @@ Binary crate — no public API. Internal architecture:
 - **`View`** — enum with 11 variants mapping to UI panels.
 - **`AppEvent`** — `Key(KeyEvent)` or `Resize(u16, u16)`.
 - **`terminal`** module — `setup()`, `teardown()`, `install_panic_hook()` for crossterm lifecycle.
-- **`ui`** module — 14 submodules, one per panel/widget.
+- **`ui`** module — submodules, one per panel/widget, plus:
+  - **`theme`** — `Theme` (semantic colour slots) and `parse_color` for customizing the palette via `config.json`.
+  - **`keymap`** — `Action` enum and `KeyBindings` for customizable shortcuts (resolved from `config.json`).
 
 The binary entry point in `main.rs` wires real adapters and runs the ratatui event loop.
 
