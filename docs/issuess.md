@@ -63,8 +63,8 @@ Legenda: **[MUST]** ataca dor top da pesquisa · **[DEP]** tem dependência bloq
 
 - [x] **Config persistida da TUI**
       Paths custom de agentes, tema, keymap, proxy — em `~/.config/ai-skill/`. (Hoje só temos cores/responsividade como débito transversal.)
-- [ ] **Temas (base16) + keymap customizável**
-      Definir cores por slot semântico; permitir rebind de teclas estilo Atuin.
+- [x] **Temas (base16) + keymap customizável**
+      Definir cores por slot semântico; permitir rebind de teclas estilo Atuin. (Implementado: `Theme`/`parse_color` em `tui/src/ui/theme.rs`, `KeyBindings` customizável de `config.json` em `tui/src/ui/keymap.rs`.)
 - [x] **Diff viewer visual** **[R]**
       Ver diff upstream com stage de hunks estilo lazygit, não só link externo. (Implementado: `SkillDiffReader`/`parse_diff` em core, `GitSkillDiffReader` em adapters, `View::Diff` na TUI aberto por `d` no detail quando há update, `diff_panel` colorido.)
 - [x] **i18n da TUI**
@@ -72,12 +72,12 @@ Legenda: **[MUST]** ataca dor top da pesquisa · **[DEP]** tem dependência bloq
 
 ## Leva G — Analytics & manutenção
 
-- [ ] **Uso & stale detection**
-      Ler históricos locais dos agentes pra mostrar frequência de uso, skills nunca chamadas ("dead skills") e stale (sem uso há N dias). Inspirado no `skilled`.
-- [ ] **Relatório de saúde exportável**
-      Exportar o audit agregado (broken refs, duplicados, dead skills, budget) como markdown/JSON pra CI ou revisão periódica.
-- [ ] **Hot-reload awareness**
-      Integrar com o hot-reload nativo do Claude Code 2.1 (skills recarregam sem restart) e refletir isso no watch reativo.
+- [x] **Uso & stale detection**
+      Ler históricos locais dos agentes pra mostrar frequência de uso, skills nunca chamadas ("dead skills") e stale (sem uso há N dias). Inspirado no `skilled`. (Implementado: `SkillUsageReader`/`build_usage_report` em core, `FsUsageHistoryReader` em adapters, painel de analytics na TUI.)
+- [x] **Relatório de saúde exportável**
+      Exportar o audit agregado (broken refs, duplicados, dead skills, budget) como markdown/JSON pra CI ou revisão periódica. (Implementado: comando `export` do `App` gerando relatório de saúde.)
+- [x] **Hot-reload awareness**
+      Integrar com o hot-reload nativo do Claude Code 2.1 (skills recarregam sem restart) e refletir isso no watch reativo. (Implementado: indicador `reload:on/off` na status bar ligado ao `FsWatcher`.)
 
 ---
 
