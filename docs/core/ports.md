@@ -1,6 +1,6 @@
 # Port Traits
 
-All eight port traits live in `core` and define the boundary between domain logic and I/O. Adapters in the `adapters` crate provide concrete implementations.
+All port traits live in `core` and define the boundary between domain logic and I/O. Adapters in the `adapters` crate provide concrete implementations.
 
 ## `SkillRepository`
 
@@ -120,6 +120,24 @@ pub trait SkillWriter {
 Write content to a file at the given path. Separate from `SkillCreator` to support the editor use case (edit existing skill content). Object-safe.
 
 **Adapter:** `FsSkillWriter`
+
+## `SkillContentReader`
+
+```rust
+pub trait SkillContentReader {
+    fn read_preview(&self, skill_dir: &Path) -> Result<SkillDoc, ContentError>;
+    fn read_tree(&self, skill_dir: &Path) -> Result<Vec<SkillTreeNode>, ContentError>;
+    fn read_file(&self, file_path: &Path) -> Result<String, ContentError>;
+}
+```
+
+Reads a skill's on-disk file content for the TUI split preview and directory explorer.
+`read_preview` resolves `README.md` → `readme.md` → `Readme.md` → `SKILL.md` (stripping
+frontmatter for `SKILL.md`); `read_tree` returns a depth-first listing that flags nested
+sub-skills (directories containing `SKILL.md`); `read_file` returns raw text capped at 64 KB.
+Object-safe.
+
+**Adapter:** `FsSkillContentReader`
 
 ---
 

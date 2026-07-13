@@ -6,9 +6,9 @@ use ai_skill_core::{
     AnyCatalogGateway, Bundle, BundleStore, CatalogEntry, ConfigStore, ConnectionStatus,
     ContextBudget, DriftState, ExternalScanner, LintWarning, Phase, Profile, ProfileOp,
     ProfileStore, ProjectSettings, RemoteHost, RemoteSkill, ScanFinding, Scope, SettingsStore,
-    SignatureVerifier, Skill, SkillCreator, SkillInstaller, SkillMode, SkillSync, SkillToggler,
-    SkillWriter, Snapshot, SshConnector, SyncStatus, TuiConfig, calculate_budget, cross_reference,
-    scan_skill,
+    SignatureVerifier, Skill, SkillContentReader, SkillCreator, SkillInstaller, SkillMode,
+    SkillSync, SkillToggler, SkillTreeNode, SkillWriter, Snapshot, SshConnector, SyncStatus,
+    TuiConfig, calculate_budget, cross_reference, scan_skill,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::path::PathBuf;
@@ -40,6 +40,8 @@ pub enum View {
     Sync,
     /// Upstream diff of a skill with an available update.
     Diff,
+    /// Directory explorer for a single skill (nested sub-skills, file preview).
+    Explorer,
 }
 
 /// Steps in the create-skill wizard.
@@ -300,6 +302,13 @@ pub struct App<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> {
     pub list_state: ListUiState,
     pub detail_scroll: u16,
     pub diff_scroll: u16,
+    pub preview_scroll: u16,
+    pub explorer_nodes: Vec<SkillTreeNode>,
+    pub explorer_selected_index: usize,
+    pub explorer_scroll: u16,
+    pub explorer_file_content: Option<String>,
+    pub explorer_title: String,
+    pub content_reader: Box<dyn SkillContentReader>,
     pub search_state: SearchState,
     pub install_wizard_state: InstallWizardState,
     pub pending_action: Option<AppAction>,
@@ -366,6 +375,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
         sync_store: Box<dyn SkillSync>,
         config_store: Box<dyn ConfigStore>,
         config: TuiConfig,
+        content_reader: Box<dyn SkillContentReader>,
     ) -> Self {
         let profiles = profile_store.list().unwrap_or_default();
         let budget = calculate_budget(&all_skills);
@@ -378,6 +388,13 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             list_state: ListUiState::new(),
             detail_scroll: 0,
             diff_scroll: 0,
+            preview_scroll: 0,
+            explorer_nodes: vec![],
+            explorer_selected_index: 0,
+            explorer_scroll: 0,
+            explorer_file_content: None,
+            explorer_title: String::new(),
+            content_reader,
             search_state: SearchState::default(),
             install_wizard_state: InstallWizardState::default(),
             pending_action: None,
@@ -473,6 +490,61 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
         visible.get(self.list_state.selected_index).copied()
     }
 
+    /// The currently selected node in the skill explorer, if any.
+    pub fn explorer_selected_node(&self) -> Option<&SkillTreeNode> {
+        self.explorer_nodes
+            .get(self.explorer_selected_index)
+            .filter(|_| !self.explorer_nodes.is_empty())
+    }
+
+    /// Opens the directory explorer for the selected skill.
+    ///
+    /// Builds the file tree and loads content for the first node so the right
+    /// panel is populated immediately.
+    pub fn open_explorer(&mut self) {
+        let Some(skill) = self.selected_skill().cloned() else {
+            return;
+        };
+        self.explorer_title = skill.name.clone();
+        self.explorer_nodes = self
+            .content_reader
+            .read_tree(&skill.path)
+            .unwrap_or_default();
+        self.explorer_selected_index = 0;
+        self.explorer_scroll = 0;
+        self.refresh_explorer_selection();
+        self.view = View::Explorer;
+    }
+
+    /// Loads the right-panel content for the currently selected explorer node.
+    ///
+    /// Files show their raw text; directories show a README/SKILL.md preview
+    /// when available, otherwise a short placeholder.
+    fn refresh_explorer_selection(&mut self) {
+        self.explorer_file_content = None;
+        if let Some(node) = self.explorer_selected_node() {
+            if node.is_dir {
+                match self.content_reader.read_preview(&node.path) {
+                    Ok(doc) => {
+                        self.explorer_file_content =
+                            Some(format!("{}:\n\n{}", doc.title, doc.content));
+                    }
+                    Err(_) => {
+                        self.explorer_file_content = Some(format!("directory: {}", node.name));
+                    }
+                }
+            } else {
+                match self.content_reader.read_file(&node.path) {
+                    Ok(text) => self.explorer_file_content = Some(text),
+                    Err(_) => {
+                        self.explorer_file_content = Some(format!("(cannot read {})", node.name));
+                    }
+                }
+            }
+        }
+        self.explorer_scroll = 0;
+    }
+
     pub fn handle_event(&mut self, event: AppEvent) {
         self.disarm_quit_if_expired();
         match event {
@@ -504,6 +576,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 View::Bundles => self.handle_bundles_key(key),
                 View::Sync => self.handle_sync_key(key),
                 View::Diff => self.handle_diff_key(key),
+                View::Explorer => self.handle_explorer_key(key),
             },
             AppEvent::Resize => {}
         }
@@ -826,8 +899,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 self.list_state.selected_index = 0;
             }
             KeyCode::Enter if self.selected_skill().is_some() => {
-                self.detail_scroll = 0;
-                self.view = View::Detail;
+                self.open_explorer();
             }
             KeyCode::Char('t') if key.modifiers == KeyModifiers::NONE => {
                 self.cycle_tag_filter();
@@ -1054,6 +1126,65 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             }
             KeyCode::Up | KeyCode::Char('k') if key.modifiers == KeyModifiers::NONE => {
                 self.diff_scroll = self.diff_scroll.saturating_sub(1);
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_explorer_key(&mut self, key: crossterm::event::KeyEvent) {
+        let len = self.explorer_nodes.len();
+        if len == 0 {
+            if key.code == KeyCode::Esc {
+                self.view = View::List;
+            }
+            return;
+        }
+        match key.code {
+            KeyCode::Esc => {
+                self.view = View::List;
+            }
+            KeyCode::Down | KeyCode::Char('j')
+                if key.modifiers == KeyModifiers::NONE
+                    && self.explorer_selected_index + 1 < len =>
+            {
+                self.explorer_selected_index += 1;
+                self.refresh_explorer_selection();
+            }
+            KeyCode::Up | KeyCode::Char('k') if key.modifiers == KeyModifiers::NONE => {
+                self.explorer_selected_index = self.explorer_selected_index.saturating_sub(1);
+                self.refresh_explorer_selection();
+            }
+            KeyCode::Left | KeyCode::Char('h') if key.modifiers == KeyModifiers::NONE => {
+                let current_depth = self.explorer_selected_node().map(|n| n.depth).unwrap_or(0);
+                if current_depth > 0 {
+                    // Jump to the nearest preceding ancestor (depth - 1).
+                    let target = (0..self.explorer_selected_index)
+                        .rev()
+                        .find(|&i| self.explorer_nodes[i].depth == current_depth - 1);
+                    if let Some(idx) = target {
+                        self.explorer_selected_index = idx;
+                        self.refresh_explorer_selection();
+                    }
+                }
+            }
+            KeyCode::Right | KeyCode::Char('l') if key.modifiers == KeyModifiers::NONE => {
+                if let Some(node) = self.explorer_selected_node()
+                    && node.is_dir
+                {
+                    let child_depth = node.depth + 1;
+                    let target = (self.explorer_selected_index + 1..len)
+                        .find(|&i| self.explorer_nodes[i].depth == child_depth);
+                    if let Some(idx) = target {
+                        self.explorer_selected_index = idx;
+                        self.refresh_explorer_selection();
+                    }
+                }
+            }
+            KeyCode::PageDown => {
+                self.explorer_scroll += 1;
+            }
+            KeyCode::PageUp => {
+                self.explorer_scroll = self.explorer_scroll.saturating_sub(1);
             }
             _ => {}
         }
@@ -2104,6 +2235,33 @@ mod tests {
         }
     }
 
+    struct FakeContentReader;
+    impl ai_skill_core::SkillContentReader for FakeContentReader {
+        fn read_preview(
+            &self,
+            _skill_dir: &std::path::Path,
+        ) -> Result<ai_skill_core::SkillDoc, ai_skill_core::ContentError> {
+            Ok(ai_skill_core::SkillDoc {
+                title: "README.md".into(),
+                content: "(preview)".into(),
+            })
+        }
+
+        fn read_tree(
+            &self,
+            _skill_dir: &std::path::Path,
+        ) -> Result<Vec<ai_skill_core::SkillTreeNode>, ai_skill_core::ContentError> {
+            Ok(vec![])
+        }
+
+        fn read_file(
+            &self,
+            _file_path: &std::path::Path,
+        ) -> Result<String, ai_skill_core::ContentError> {
+            Ok("(file)".into())
+        }
+    }
+
     fn make_app(skills: Vec<Skill>) -> TestApp {
         App::new(
             skills,
@@ -2121,6 +2279,7 @@ mod tests {
             Box::new(FakeSkillSync),
             Box::new(FakeConfigStore),
             TuiConfig::default(),
+            Box::new(FakeContentReader),
         )
     }
 
@@ -2170,6 +2329,41 @@ mod tests {
         let mut app = make_app(make_skills(1));
         app.handle_event(key(KeyCode::Esc));
         assert!(!app.should_quit);
+    }
+
+    // ── skill explorer ──────────────────────────────────────────────────────
+
+    #[test]
+    fn enter_opens_explorer_for_selected_skill() {
+        let mut app = make_app(make_skills(2));
+        app.handle_event(key(KeyCode::Enter));
+        assert_eq!(app.view, View::Explorer);
+        assert_eq!(app.explorer_title, "skill-0");
+    }
+
+    #[test]
+    fn enter_without_selection_does_not_open_explorer() {
+        let mut app = make_app(vec![]);
+        app.handle_event(key(KeyCode::Enter));
+        assert_eq!(app.view, View::List);
+    }
+
+    #[test]
+    fn esc_in_explorer_returns_to_list() {
+        let mut app = make_app(make_skills(1));
+        app.handle_event(key(KeyCode::Enter));
+        assert_eq!(app.view, View::Explorer);
+        app.handle_event(key(KeyCode::Esc));
+        assert_eq!(app.view, View::List);
+    }
+
+    #[test]
+    fn esc_in_empty_explorer_returns_to_list() {
+        let mut app = make_app(make_skills(1));
+        app.handle_event(key(KeyCode::Enter));
+        app.explorer_nodes.clear();
+        app.handle_event(key(KeyCode::Esc));
+        assert_eq!(app.view, View::List);
     }
 
     // ── command palette ───────────────────────────────────────────────────────
@@ -2303,10 +2497,10 @@ mod tests {
     // ── view transitions ──────────────────────────────────────────────────────
 
     #[test]
-    fn enter_transitions_to_detail_view() {
+    fn enter_transitions_to_explorer_view() {
         let mut app = make_app(make_skills(2));
         app.handle_event(key(KeyCode::Enter));
-        assert_eq!(app.view, View::Detail);
+        assert_eq!(app.view, View::Explorer);
     }
 
     #[test]
@@ -2427,6 +2621,7 @@ mod tests {
             Box::new(FakeSkillSync),
             Box::new(FakeConfigStore),
             TuiConfig::default(),
+            Box::new(FakeContentReader),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('o')));
@@ -2452,6 +2647,7 @@ mod tests {
             Box::new(FakeSkillSync),
             Box::new(FakeConfigStore),
             TuiConfig::default(),
+            Box::new(FakeContentReader),
         );
         app.view = View::Search;
         app.search_state.query = "om".to_string();
@@ -2477,6 +2673,7 @@ mod tests {
             Box::new(FakeSkillSync),
             Box::new(FakeConfigStore),
             TuiConfig::default(),
+            Box::new(FakeContentReader),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('x')));
@@ -2513,6 +2710,7 @@ mod tests {
             Box::new(FakeSkillSync),
             Box::new(FakeConfigStore),
             TuiConfig::default(),
+            Box::new(FakeContentReader),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('x')));
@@ -2741,6 +2939,7 @@ mod tests {
             Box::new(FakeSkillSync),
             Box::new(FakeConfigStore),
             TuiConfig::default(),
+            Box::new(FakeContentReader),
         );
         app.view = View::Search;
         app.handle_event(key(KeyCode::Char('o'))); // search to get results

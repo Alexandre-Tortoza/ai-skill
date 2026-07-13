@@ -28,6 +28,13 @@ Three ports are generic parameters (monomorphized at compile time); the rest are
 | `list_state` | `ListUiState` | List filter, selection, multi-select |
 | `detail_scroll` | `u16` | Scroll position in detail view |
 | `diff_scroll` | `u16` | Scroll position in diff view |
+| `preview_scroll` | `u16` | Scroll position in list split-preview pane |
+| `explorer_nodes` | `Vec<SkillTreeNode>` | Directory tree of the explored skill |
+| `explorer_selected_index` | `usize` | Selected node in the explorer tree |
+| `explorer_scroll` | `u16` | Scroll position in explorer file pane |
+| `explorer_file_content` | `Option<String>` | Right-pane content for the selected node |
+| `explorer_title` | `String` | Title (skill name) of the active explorer |
+| `content_reader` | `Box<dyn SkillContentReader>` | Reads skill file content from disk |
 | `search_state` | `SearchState` | Query, results, selection |
 | `install_wizard_state` | `InstallWizardState` | Install wizard fields |
 | `pending_action` | `Option<AppAction>` | Action awaiting confirmation |
@@ -43,7 +50,7 @@ Three ports are generic parameters (monomorphized at compile time); the rest are
 
 ```rust
 pub enum View {
-    List,           // Main skill list (default)
+    List,           // Split list + README preview (default)
     Detail,         // Skill detail + manifest body
     Search,         // Remote catalog search
     Help,           // Key binding overlay
@@ -55,6 +62,7 @@ pub enum View {
     Editor,         // Frontmatter editor
     Audit,          // Aggregated audit report
     Diff,           // Upstream diff of a skill's manifest
+    Explorer,       // Directory explorer for a single skill
 }
 ```
 
@@ -76,6 +84,7 @@ pub fn handle_event(&mut self, event: AppEvent) {
             View::Editor       => self.handle_editor_key(key),
             View::Audit        => self.handle_audit_key(key),
             View::Diff         => self.handle_diff_key(key),
+            View::Explorer     => self.handle_explorer_key(key),
         },
         AppEvent::Resize => { /* no state change, TUI redraws */ },
     }

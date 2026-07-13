@@ -1,12 +1,18 @@
 # TUI Views
 
-The TUI has 12 views. Each is rendered by a dedicated panel function.
+The TUI has 13 views. Each is rendered by a dedicated panel function.
 
 ## List View (default)
 
-**Panel:** `installed_panel::render_installed_panel`
+**Panel:** `split_preview_panel::render_split_preview`
 
-Displays all installed skills as a scrollable list with colored status badges:
+Split layout:
+
+- **Left (40%):** `installed_panel::render_installed_panel` — all installed skills as a
+  scrollable list with colored status badges.
+- **Right (60%):** live preview of the selected skill's `README.md`/`SKILL.md`.
+
+Displays all installed skills with colored status badges:
 
 | Badge | Color | State |
 |---|---|---|
@@ -112,6 +118,18 @@ Color-coded upstream diff of a skill's `SKILL.md` (`git diff HEAD..@{u}`), shown
 update is available (opened from the Detail view via `d`). Additions are green, removals red,
 headers accented. Requires the skill to be a Git checkout with an upstream tracking branch.
 
+## Explorer View
+
+**Panel:** `skill_explorer_panel::render_skill_explorer`
+
+Opened with `Enter` from the List view. Split layout:
+
+- **Left (40%):** a depth-first directory tree of the skill. Directories use `▾`, nested
+  sub-skills (directories containing `SKILL.md`) use `▾◈`, and files are marked by kind
+  (`▸` markdown, `$` script, `#` config, `·` other).
+- **Right (60%):** content of the selected file, or a `README.md`/`SKILL.md` preview when a
+  directory is selected.
+
 ## Command Palette
 
 **Overlay:** `command_palette::render_command_palette`
@@ -125,28 +143,30 @@ Navigation: `↑`/`↓` (or `j`/`k`) to move, `Enter` to run the selected comman
 
 ## Key Bindings by View
 
-| Key | List | Detail | Search | Help | Confirm | Wizard | Scan | Profiles | Create | Editor | Audit | Diff |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `↑`/`↓` | Navigate | Scroll | Navigate | — | — | — | Scroll | Navigate | — | — | Scroll | Scroll |
-| `j`/`k` | — | — | — | — | — | — | — | — | — | — | — | Scroll |
-| `Enter` | Detail | — | Wizard | — | Confirm | Next | Proceed | Activate | Next | Save | — | — |
-| `Esc` | — | Back | Back | Close | Cancel | Cancel | Cancel | Back | Cancel | Cancel | Back | Back |
-| `Ctrl+P` | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette |
-| `Ctrl-C` | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 |
-| `/` | Search | — | — | — | — | — | — | — | — | — | — | — |
-| `Tab` | Filter | — | — | — | — | Scope | — | — | Step | Field | — | — |
-| `Space` | Select | — | — | — | — | Agent | — | — | — | — | — | — |
-| `t` | Tag | — | — | — | — | — | — | — | — | — | — | — |
-| `s` | Scan | — | — | — | — | — | — | — | — | — | — | — |
-| `p` | Profiles | — | — | — | — | — | — | — | — | — | — | — |
-| `a` | Audit | — | — | — | — | — | — | — | — | — | — | — |
-| `c` | Create | — | — | — | — | — | — | Create | — | — | — | — |
-| `e` | Edit | — | — | — | — | — | — | — | — | — | — | — |
-| `d` | Disable | Diff | — | — | — | — | — | Delete | — | — | — | — |
-| `r` | Remove | — | — | — | — | — | — | — | — | — | — | — |
-| `u` | Update | — | — | — | — | — | — | — | — | — | — | — |
-| `?` | Help | — | — | Close | — | — | — | — | — | — | — | — |
-| `y` / `n` | — | — | — | — | Yes/No | — | — | — | — | — | — | — |
+| Key | List | Detail | Search | Help | Confirm | Wizard | Scan | Profiles | Create | Editor | Audit | Diff | Explorer |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `↑`/`↓` | Navigate | Scroll | Navigate | — | — | — | Scroll | Navigate | — | — | Scroll | Scroll | Navigate |
+| `j`/`k` | — | — | — | — | — | — | — | — | — | — | Scroll | Scroll | Navigate |
+| `←`/`→` | — | — | — | — | — | — | — | — | — | — | — | — | Parent/Child |
+| `PgUp`/`PgDn` | — | — | — | — | — | — | — | — | — | — | — | — | Scroll |
+| `Enter` | Explorer | — | Wizard | — | Confirm | Next | Proceed | Activate | Next | Save | — | — | Open |
+| `Esc` | — | Back | Back | Close | Cancel | Cancel | Cancel | Back | Cancel | Cancel | Back | Back | Back |
+| `Ctrl+P` | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette |
+| `Ctrl-C` | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 |
+| `/` | Search | — | — | — | — | — | — | — | — | — | — | — | — |
+| `Tab` | Filter | — | — | — | — | Scope | — | — | Step | Field | — | — | — |
+| `Space` | Select | — | — | — | — | Agent | — | — | — | — | — | — | — |
+| `t` | Tag | — | — | — | — | — | — | — | — | — | — | — | — |
+| `s` | Scan | — | — | — | — | — | — | — | — | — | — | — | — |
+| `p` | Profiles | — | — | — | — | — | — | — | — | — | — | — | — |
+| `a` | Audit | — | — | — | — | — | — | — | — | — | — | — | — |
+| `c` | Create | — | — | — | — | — | — | Create | — | — | — | — | — |
+| `e` | Edit | — | — | — | — | — | — | — | — | — | — | — | — |
+| `d` | Disable | Diff | — | — | — | — | — | Delete | — | — | — | — | — |
+| `r` | Remove | — | — | — | — | — | — | — | — | — | — | — | — |
+| `u` | Update | — | — | — | — | — | — | — | — | — | — | — | — |
+| `?` | Help | — | — | Close | — | — | — | — | — | — | — | — | — |
+| `y` / `n` | — | — | — | — | Yes/No | — | — | — | — | — | — | — | — |
 
 ---
 

@@ -9,6 +9,7 @@ pub mod budget;
 pub mod bundle;
 pub mod catalog;
 pub mod config;
+pub mod content;
 pub mod creator;
 pub mod diff;
 pub mod drift;
@@ -42,6 +43,8 @@ pub use bundle::{Bundle, BundleStore};
 pub use catalog::{AnyCatalogGateway, CatalogEntry};
 /// TUI configuration model and persistence port.
 pub use config::{CONFIG_DIR, CONFIG_FILE, ConfigStore, TuiConfig};
+/// Skill file-content models and reader port for the TUI preview/explorer.
+pub use content::{ContentError, SkillContentReader, SkillDoc, SkillFileKind, SkillTreeNode};
 /// Ports and helpers for creating and editing skill manifests.
 pub use creator::{SkillCreator, SkillWriter, apply_edit, scaffold_skill};
 /// Upstream diff model and reader port for visualizing skill changes.

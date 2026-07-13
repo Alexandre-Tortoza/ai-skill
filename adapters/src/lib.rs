@@ -10,6 +10,7 @@ pub mod fs_config_store;
 pub mod fs_plugin_discoverer;
 pub mod fs_profile_store;
 pub mod fs_settings_store;
+pub mod fs_skill_content;
 pub mod fs_skill_creator;
 pub mod fs_skill_repository;
 pub mod fs_toggler;
@@ -35,6 +36,8 @@ pub use fs_plugin_discoverer::{FsPluginDiscoverer, PluginDiscovererError};
 pub use fs_profile_store::FsProfileStore;
 /// Adapter that reads/writes `.claude/settings.json` for auto-trigger control.
 pub use fs_settings_store::FsSettingsStore;
+/// Adapter that reads a skill's on-disk file content (preview, tree, files).
+pub use fs_skill_content::FsSkillContentReader;
 /// Adapters that create and write SKILL.md files to the filesystem.
 pub use fs_skill_creator::{FsSkillCreator, FsSkillWriter};
 /// Adapter that scans `~/.claude/skills/` (and optionally the project `.claude/skills/`).

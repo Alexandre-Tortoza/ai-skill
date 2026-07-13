@@ -76,8 +76,11 @@ impl I18n {
     /// Returns the per-view key hint line.
     pub fn status_hint(&self, view: &View) -> &'static str {
         match (self.locale, *view) {
-            (Locale::En, View::List) => "↑↓ navigate  Enter details  Ctrl+P commands  Ctrl-C quit",
+            (Locale::En, View::List) => "↑↓ navigate  Enter explore  Ctrl+P commands  Ctrl-C quit",
             (Locale::En, View::Detail) => "↑↓ scroll  d diff  Esc back  Ctrl+P commands",
+            (Locale::En, View::Explorer) => {
+                "↑↓/←→ navigate  PgUp/PgDn scroll  Esc back  Ctrl+P commands"
+            }
             (Locale::En, View::Search) => "type search  j/k move  Enter install  Esc back",
             (Locale::En, View::Help) => "Esc close",
             (Locale::En, View::Confirm) => "y confirm  n / Esc cancel",
@@ -103,9 +106,12 @@ impl I18n {
             }
             (Locale::En, View::Diff) => "j/k scroll  Esc back",
             (Locale::PtBr, View::List) => {
-                "↑↓ navegar  Enter detalhes  Ctrl+P comandos  Ctrl-C sair"
+                "↑↓ navegar  Enter explorar  Ctrl+P comandos  Ctrl-C sair"
             }
             (Locale::PtBr, View::Detail) => "↑↓ rolar  d diff  Esc voltar  Ctrl+P comandos",
+            (Locale::PtBr, View::Explorer) => {
+                "↑↓/←→ navegar  PgUp/PgDn rolar  Esc voltar  Ctrl+P comandos"
+            }
             (Locale::PtBr, View::Search) => "digite busca  j/k mover  Enter instalar  Esc voltar",
             (Locale::PtBr, View::Help) => "Esc fechar",
             (Locale::PtBr, View::Confirm) => "s confirmar  n / Esc cancelar",
@@ -499,7 +505,7 @@ const HELP_EN: &str = "\
 j / ↓       move down
 k / ↑       move up
 Tab         cycle scope filter (all → global → project)
-Enter       open skill detail
+Enter       explore skill files
 s           open catalog search
 S           git sync (snapshots / push / pull)
 R           SSH remote management
@@ -514,6 +520,12 @@ Ctrl-C      quit (press twice)
 --- in detail view ---
 o           toggle skill auto-trigger
 
+--- in explorer view ---
+↑↓          move file selection
+← →         parent / first child of a directory
+PgUp/PgDn   scroll file content
+Esc         back to list
+
 --- in settings view ---
 t           toggle global auto-trigger
 j/k         move in overrides list
@@ -525,7 +537,7 @@ const HELP_PT_BR: &str = "\
 j / ↓       mover para baixo
 k / ↑       mover para cima
 Tab         alternar filtro de escopo (todos → global → projeto)
-Enter       abrir detalhe da skill
+Enter       explorar arquivos da skill
 s           abrir busca no catálogo
 S           sincronizar git (snapshots / push / pull)
 R           gerenciar remoto SSH
@@ -539,6 +551,12 @@ Ctrl-C      sair (pressione duas vezes)
 
 --- na view de detalhe ---
 o           alternar auto-disparo da skill
+
+--- na view de explorador ---
+↑↓          mover seleção de arquivo
+← →         pai / primeiro filho de um diretório
+PgUp/PgDn   rolar conteúdo do arquivo
+Esc         voltar para a lista
 
 --- na view de configurações ---
 t           alternar auto-disparo global

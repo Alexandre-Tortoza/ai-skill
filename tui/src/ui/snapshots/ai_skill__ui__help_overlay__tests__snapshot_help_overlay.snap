@@ -13,7 +13,7 @@ Buffer {
         "          │j / ↓       move down                                     │          ",
         "          │k / ↑       move up                                       │          ",
         "          │Tab         cycle scope filter (all → global → project)   │          ",
-        "          │Enter       open skill detail                             │          ",
+        "          │Enter       explore skill files                           │          ",
         "          │s           open catalog search                           │          ",
         "          │S           git sync (snapshots / push / pull)            │          ",
         "          │R           SSH remote management                         │          ",

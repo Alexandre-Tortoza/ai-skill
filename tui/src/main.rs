@@ -11,9 +11,9 @@ use ui::theme::Theme;
 
 use ai_skill_adapters::{
     CliInstaller, CompositeCatalogGateway, FsBundleStore, FsConfigStore, FsPluginDiscoverer,
-    FsProfileStore, FsSettingsStore, FsSkillCreator, FsSkillRepository, FsSkillWriter, FsToggler,
-    FsUsageHistoryReader, FsWatcher, GitDriftChecker, GitSkillDiffReader, GitSkillSync,
-    NpxCatalogGateway, SshCommandConnector,
+    FsProfileStore, FsSettingsStore, FsSkillContentReader, FsSkillCreator, FsSkillRepository,
+    FsSkillWriter, FsToggler, FsUsageHistoryReader, FsWatcher, GitDriftChecker, GitSkillDiffReader,
+    GitSkillSync, NpxCatalogGateway, SshCommandConnector,
 };
 use ai_skill_core::{
     BudgetWarning, ConfigStore, DriftChecker, NoopExternalScanner, NoopSignatureVerifier,
@@ -124,6 +124,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )),
         config_store,
         config,
+        Box::new(FsSkillContentReader::new()),
     );
 
     app.ssh_state.hosts = vec![RemoteHost::new("local", "127.0.0.1")];
@@ -144,9 +145,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let visible = app.visible_skills();
             match &app.view {
                 View::List => {
-                    ui::installed_panel::render_installed_panel(
+                    let preview = app
+                        .selected_skill()
+                        .and_then(|skill| app.content_reader.read_preview(&skill.path).ok());
+                    ui::split_preview_panel::render_split_preview(
                         &visible,
                         &app.list_state,
+                        preview.as_ref(),
+                        app.preview_scroll,
+                        main_area,
+                        f,
+                    );
+                }
+                View::Explorer => {
+                    ui::skill_explorer_panel::render_skill_explorer(
+                        &app.explorer_nodes,
+                        app.explorer_selected_index,
+                        app.explorer_file_content.as_deref(),
+                        &app.explorer_title,
+                        app.explorer_scroll,
                         main_area,
                         f,
                     );

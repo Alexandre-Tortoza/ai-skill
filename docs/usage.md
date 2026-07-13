@@ -119,16 +119,17 @@ Unrecognized or missing values fall back to English. The `--json` and
 
 ## Views (Modes)
 
-The TUI has 12 views, each accessed by a key binding. The status bar at the bottom shows context-sensitive hints for the active view.
+The TUI has 13 views, each accessed by a key binding. The status bar at the bottom shows context-sensitive hints for the active view.
 
 ### List View (default)
 
-Shows all installed skills grouped by scope (Global, Project).
+Shows all installed skills grouped by scope (Global, Project) on the **left** pane, with a
+live **preview** of the selected skill's `README.md`/`SKILL.md` on the **right** pane.
 
 | Key | Action |
 |---|---|
-| `↑` / `↓` | Navigate the list |
-| `Enter` | Open detail view for the selected skill |
+| `↑` / `↓` | Navigate the list (right pane follows selection) |
+| `Enter` | Explore the selected skill's files |
 | `/` | Focus search query input |
 | `t` | Filter by tag |
 | `s` | Open security scan report for the selected skill |
@@ -141,6 +142,21 @@ Shows all installed skills grouped by scope (Global, Project).
 | `?` | Open help overlay |
 | `Ctrl+P` | Open the command palette (all actions) |
 | `Ctrl+C` | Quit (press twice; a warning appears for 3s) |
+
+### Explorer View
+
+Opened with `Enter` from the List view. Shows the selected skill's directory tree on the
+**left** and the content of the selected file (or a directory preview) on the **right**.
+Nested sub-skills — directories that themselves contain a `SKILL.md` — are marked with `◈`
+and can be navigated like any other directory.
+
+| Key | Action |
+|---|---|
+| `↑` / `↓` | Move file selection |
+| `←` / `→` | Jump to parent directory / first child of a directory |
+| `PgUp` / `PgDn` | Scroll the file-content pane |
+| `Esc` | Return to the list view |
+| `Ctrl+P` | Open the command palette (all actions) |
 
 The **command palette** (`Ctrl+P`) lists every action — search, new skill, audit, budget,
 profiles, bundles, sync, settings, help, and, when a skill is selected, open detail / edit /

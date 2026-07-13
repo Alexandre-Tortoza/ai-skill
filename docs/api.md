@@ -106,8 +106,8 @@ Each adapter provides:
 
 Binary crate — no public API. Internal architecture:
 
-- **`App<G, I, T>`** — generic over gateway, installer, toggler. Holds all state, dispatches to 11 view handlers.
-- **`View`** — enum with 11 variants mapping to UI panels.
+- **`App<G, I, T>`** — generic over gateway, installer, toggler. Holds all state, dispatches to 12 view handlers.
+- **`View`** — enum with 13 variants mapping to UI panels (incl. `List` split preview and `Explorer`).
 - **`AppEvent`** — `Key(KeyEvent)` or `Resize(u16, u16)`.
 - **`terminal`** module — `setup()`, `teardown()`, `install_panic_hook()` for crossterm lifecycle.
 - **`ui`** module — submodules, one per panel/widget, plus:
@@ -115,7 +115,9 @@ Binary crate — no public API. Internal architecture:
   - **`keymap`** — `Action` enum and `KeyBindings` for customizable shortcuts (resolved from `config.json`).
    - **`i18n`** — `Locale` (en / pt-BR) and `I18n` for localized UI strings, resolved from `config.json` `locale`. `I18n::from_config(None)` falls back to English.
    - **`diff_panel`** — `render_diff_panel(...)`: color-coded renderer for a skill's upstream diff (`SkillDiff`), reached from the detail view via `d` when an update is available.
-   - **`command_palette`** — `render_command_palette(...)`: floating overlay listing `PaletteCommand`s (`Search`, `Create`, `Audit`, `Budget`, `Profiles`, `Bundles`, `Sync`, `Settings`, `Help`, and selected-skill actions `OpenDetail`/`Edit`/`Disable`/`Remove`/`Update`/`Diff`). Opened with `Ctrl+P`; `Enter` runs the selected command.
+    - **`command_palette`** — `render_command_palette(...)`: floating overlay listing `PaletteCommand`s (`Search`, `Create`, `Audit`, `Budget`, `Profiles`, `Bundles`, `Sync`, `Settings`, `Help`, and selected-skill actions `OpenDetail`/`Edit`/`Disable`/`Remove`/`Update`/`Diff`). Opened with `Ctrl+P`; `Enter` runs the selected command.
+    - **`split_preview_panel`** — `render_split_preview(...)`: List view split — `installed_panel` (left) plus a live `README.md`/`SKILL.md` preview (right) for the selected skill.
+    - **`skill_explorer_panel`** — `render_skill_explorer(...)`: `Enter` from the list opens the directory tree (left) and file content (right) for the selected skill; nested sub-skills are marked `◈`.
    - **Quit** — `Ctrl+C` must be pressed twice within 3s (`App::request_quit` arms a timer; `quit_warning_active` drives the status-bar warning). `q` no longer quits; `Esc` only closes panels/modals.
 
 The binary entry point in `main.rs` wires real adapters and runs the ratatui event loop.
