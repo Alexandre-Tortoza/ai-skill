@@ -106,6 +106,7 @@ Binary crate — no public API. Internal architecture:
 - **`ui`** module — submodules, one per panel/widget, plus:
   - **`theme`** — `Theme` (semantic colour slots) and `parse_color` for customizing the palette via `config.json`.
   - **`keymap`** — `Action` enum and `KeyBindings` for customizable shortcuts (resolved from `config.json`).
+  - **`i18n`** — `Locale` (en / pt-BR) and `I18n` for localized UI strings, resolved from `config.json` `locale`. `I18n::from_config(None)` falls back to English.
 
 The binary entry point in `main.rs` wires real adapters and runs the ratatui event loop.
 

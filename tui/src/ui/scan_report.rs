@@ -1,5 +1,6 @@
 //! Overlay that shows security scan findings before confirming an install.
 
+use crate::i18n::I18n;
 use ai_skill_core::{ScanFinding, Severity};
 use ratatui::{
     Frame,
@@ -13,7 +14,13 @@ use super::style_helpers::fg;
 use super::theme::{Theme, ThemeSlot};
 
 /// Renders an overlay listing security scan findings before install confirmation.
-pub fn render_scan_report(findings: &[ScanFinding], theme: &Theme, area: Rect, frame: &mut Frame) {
+pub fn render_scan_report(
+    findings: &[ScanFinding],
+    theme: &Theme,
+    area: Rect,
+    frame: &mut Frame,
+    i18n: &I18n,
+) {
     let popup_width = area.width * 3 / 4;
     let popup_height = (findings.len() as u16 + 6).min(area.height - 4);
     let x = area.x + (area.width - popup_width) / 2;
@@ -23,7 +30,7 @@ pub fn render_scan_report(findings: &[ScanFinding], theme: &Theme, area: Rect, f
     frame.render_widget(Clear, popup_area);
 
     let block = Block::default()
-        .title(" Security Findings ")
+        .title(i18n.scan_title())
         .borders(Borders::ALL)
         .border_style(fg(theme.color(ThemeSlot::Error)));
 
@@ -36,8 +43,8 @@ pub fn render_scan_report(findings: &[ScanFinding], theme: &Theme, area: Rect, f
         .iter()
         .map(|f| {
             let severity_label = match f.severity {
-                Severity::High => "[HIGH]",
-                Severity::Medium => "[MED] ",
+                Severity::High => i18n.severity_high(),
+                Severity::Medium => i18n.severity_medium(),
             };
             let color = match f.severity {
                 Severity::High => theme.color(ThemeSlot::Error),
@@ -55,7 +62,7 @@ pub fn render_scan_report(findings: &[ScanFinding], theme: &Theme, area: Rect, f
     let list = List::new(items);
     frame.render_widget(list, chunks[0]);
 
-    let footer = Paragraph::new("Enter to install anyway  |  Esc to cancel")
+    let footer = Paragraph::new(i18n.scan_footer())
         .style(fg(theme.color(ThemeSlot::Muted)).add_modifier(Modifier::ITALIC));
     frame.render_widget(footer, chunks[1]);
 }
@@ -63,6 +70,7 @@ pub fn render_scan_report(findings: &[ScanFinding], theme: &Theme, area: Rect, f
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::i18n::{I18n, Locale};
     use ai_skill_core::{ScanCategory, ScanFinding, Severity};
     use ratatui::{Terminal, backend::TestBackend};
 
@@ -75,23 +83,30 @@ mod tests {
         }
     }
 
-    #[test]
-    fn renders_without_panic_with_findings() {
+    fn render(findings: &[ScanFinding], i18n: &I18n) -> String {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
-        let findings = vec![make_finding(Severity::High)];
         terminal
-            .draw(|f| render_scan_report(&findings, &Theme::default(), f.area(), f))
+            .draw(|f| render_scan_report(findings, &Theme::default(), f.area(), f, i18n))
             .unwrap();
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn renders_without_panic_with_findings() {
+        let findings = vec![make_finding(Severity::High)];
+        render(&findings, &I18n::default());
     }
 
     #[test]
     fn renders_without_panic_empty() {
-        let backend = TestBackend::new(80, 24);
-        let mut terminal = Terminal::new(backend).unwrap();
-        terminal
-            .draw(|f| render_scan_report(&[], &Theme::default(), f.area(), f))
-            .unwrap();
+        render(&[], &I18n::default());
     }
 
     #[test]
@@ -100,8 +115,19 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         let findings = vec![make_finding(Severity::High)];
         terminal
-            .draw(|f| render_scan_report(&findings, &Theme::default(), f.area(), f))
+            .draw(|f| {
+                render_scan_report(&findings, &Theme::default(), f.area(), f, &I18n::default())
+            })
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
+    }
+
+    #[test]
+    fn pt_br_localizes_title_and_footer() {
+        let findings = vec![make_finding(Severity::High)];
+        let rendered = render(&findings, &I18n::new(Locale::PtBr));
+        assert!(rendered.contains("Achados de Segurança"));
+        assert!(rendered.contains("instalar mesmo assim"));
+        assert!(!rendered.contains("Security Findings"));
     }
 }

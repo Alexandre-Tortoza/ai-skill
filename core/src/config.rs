@@ -16,6 +16,10 @@ pub struct TuiConfig {
     /// Days of inactivity after which a skill is reported as stale.
     #[serde(default = "default_stale_after_days")]
     pub stale_after_days: u64,
+    /// UI locale code (e.g. "en", "pt-BR"). Falls back to English when unset
+    /// or unrecognized.
+    #[serde(default)]
+    pub locale: Option<String>,
 }
 
 impl Default for TuiConfig {
@@ -26,6 +30,7 @@ impl Default for TuiConfig {
             keymap: HashMap::new(),
             proxy: None,
             stale_after_days: default_stale_after_days(),
+            locale: None,
         }
     }
 }

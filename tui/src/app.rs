@@ -16,7 +16,7 @@ use crate::event::AppEvent;
 use crate::ui::settings_panel::{ConfigState, SettingsState};
 
 /// The active screen (or overlay) in the TUI.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
     List,
     Detail,
@@ -425,7 +425,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             AppEvent::Key(key) if self.key_bindings.matches(&key, Action::Quit) => {
                 self.should_quit = true;
             }
-            AppEvent::Key(key) => match self.view.clone() {
+            AppEvent::Key(key) => match self.view {
                 View::List => self.handle_list_key(key),
                 View::Detail => self.handle_detail_key(key),
                 View::Search => self.handle_search_key(key),
@@ -840,13 +840,11 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
         match key.code {
             KeyCode::Char('y') | KeyCode::Enter => {
                 self.execute_pending_action();
-                let dest = self.view_before_confirm.clone();
-                self.view = dest;
+                self.view = self.view_before_confirm;
             }
             KeyCode::Char('n') | KeyCode::Esc => {
                 self.pending_action = None;
-                let dest = self.view_before_confirm.clone();
-                self.view = dest;
+                self.view = self.view_before_confirm;
             }
             _ => {}
         }

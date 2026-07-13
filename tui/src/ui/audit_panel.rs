@@ -1,5 +1,6 @@
 //! Panel that renders an audit report broken into health categories.
 
+use crate::i18n::I18n;
 use ai_skill_core::{Skill, UsageReport, audit_skills};
 use ratatui::{
     Frame,
@@ -19,13 +20,13 @@ pub fn render_audit_panel(
     theme: &Theme,
     area: Rect,
     frame: &mut Frame,
+    i18n: &I18n,
 ) {
     let report = audit_skills(skills);
 
     let body = Layout::vertical([Constraint::Length(3), Constraint::Min(0)]).split(area);
 
-    let summary = format!(
-        "broken: {}  duplicates: {}  no-agents: {}  updates: {}  dead: {}  stale: {}",
+    let summary = i18n.audit_summary(
         report.broken.len(),
         report.duplicates.len(),
         report.no_agents.len(),
@@ -35,7 +36,11 @@ pub fn render_audit_panel(
     );
     let header = Paragraph::new(summary)
         .style(Style::default().add_modifier(Modifier::BOLD))
-        .block(Block::default().borders(Borders::ALL).title("Audit Report"));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(i18n.audit_title()),
+        );
     frame.render_widget(header, body[0]);
 
     let show_usage = !usage.dead.is_empty() || !usage.stale.is_empty();
@@ -56,28 +61,28 @@ pub fn render_audit_panel(
     .split(top);
 
     render_section(
-        "Broken",
+        i18n.cat_broken(),
         &report.broken,
         theme.color(ThemeSlot::Error),
         panels[0],
         frame,
     );
     render_section(
-        "Duplicates",
+        i18n.cat_duplicates(),
         &report.duplicates,
         theme.color(ThemeSlot::Accent),
         panels[1],
         frame,
     );
     render_section(
-        "No Agents",
+        i18n.cat_no_agents(),
         &report.no_agents,
         theme.color(ThemeSlot::Warning),
         panels[2],
         frame,
     );
     render_section(
-        "Updates",
+        i18n.cat_updates(),
         &report.update_available,
         theme.color(ThemeSlot::Success),
         panels[3],
@@ -89,14 +94,14 @@ pub fn render_audit_panel(
             Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(bottom);
         render_names(
-            &format!("Dead (>{}d)", usage.stale_after_days),
+            &i18n.usage_dead_title(usage.stale_after_days),
             &usage.dead,
             theme.color(ThemeSlot::Dead),
             usage_panels[0],
             frame,
         );
         render_names(
-            &format!("Stale (>{}d)", usage.stale_after_days),
+            &i18n.usage_stale_title(usage.stale_after_days),
             &usage.stale,
             theme.color(ThemeSlot::Stale),
             usage_panels[1],
@@ -134,6 +139,7 @@ fn render_names(title: &str, names: &[String], color: Color, area: Rect, frame: 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::i18n::{I18n, Locale};
     use ai_skill_core::{DriftState, Scope, Skill, SkillMode, UsageReport, ValidationState};
     use ratatui::{Terminal, backend::TestBackend};
     use std::path::PathBuf;
@@ -161,7 +167,16 @@ mod tests {
         let backend = TestBackend::new(80, 20);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_audit_panel(skills, usage, &Theme::default(), f.area(), f))
+            .draw(|f| {
+                render_audit_panel(
+                    skills,
+                    usage,
+                    &Theme::default(),
+                    f.area(),
+                    f,
+                    &I18n::default(),
+                )
+            })
             .unwrap();
         terminal
             .backend()
@@ -213,6 +228,7 @@ mod tests {
                     &Theme::default(),
                     f.area(),
                     f,
+                    &I18n::default(),
                 )
             })
             .unwrap();
@@ -254,5 +270,42 @@ mod tests {
         let skills = vec![make_skill("ok", ValidationState::Valid)];
         let rendered = render(&skills);
         assert!(!rendered.contains("Dead"));
+    }
+
+    #[test]
+    fn pt_br_localizes_title_summary_and_sections() {
+        let skills = vec![make_skill("broken", ValidationState::BrokenSymlink)];
+        let usage = UsageReport {
+            dead: vec!["ghost".to_string()],
+            stale: vec!["rusty".to_string()],
+            stale_after_days: 30,
+            ..Default::default()
+        };
+        let backend = TestBackend::new(80, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                render_audit_panel(
+                    &skills,
+                    &usage,
+                    &Theme::default(),
+                    f.area(),
+                    f,
+                    &I18n::new(Locale::PtBr),
+                )
+            })
+            .unwrap();
+        let rendered: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol().to_string())
+            .collect();
+        assert!(rendered.contains("Relatório de Auditoria"));
+        assert!(rendered.contains("quebrados: 1"));
+        assert!(rendered.contains("Mortos (>30d)"));
+        assert!(rendered.contains("Obsoletos (>30d)"));
+        assert!(!rendered.contains("Audit Report"));
     }
 }

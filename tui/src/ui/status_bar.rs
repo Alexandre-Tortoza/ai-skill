@@ -1,5 +1,6 @@
 //! Bottom status bar showing keyboard hints per view.
 
+use crate::{app::View, i18n::I18n, ui::style_helpers::fg_bg};
 use ai_skill_core::BudgetWarning;
 use ratatui::{
     Frame,
@@ -9,8 +10,6 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use crate::{app::View, ui::style_helpers::fg_bg};
-
 /// Renders a single-line status bar with view-specific key hints and optional budget warning.
 pub fn render_status_bar(
     view: &View,
@@ -18,26 +17,9 @@ pub fn render_status_bar(
     frame: &mut Frame,
     budget_warning: Option<&BudgetWarning>,
     hot_reload_active: bool,
+    i18n: &I18n,
 ) {
-    let hints = match view {
-        View::List => "j/k  d  e  n  r  u  a  c  A aud  B bud  S set  s srch  F1-F4  ? quit",
-        View::Detail => "j/k scroll  Esc back  q quit",
-        View::Search => "type search  j/k move  Enter install  Esc back",
-        View::Help => "Esc close",
-        View::Confirm => "y confirm  n / Esc cancel",
-        View::InstallWizard => "Tab scope  Space agent  Enter confirm  Esc back",
-        View::ScanReport => "Enter install anyway  Esc cancel",
-        View::Profiles => "j/k move  a activate  e export  f from-current  d delete  Esc back",
-        View::CreateWizard => "Tab next field  Enter create (on Preview)  Esc cancel",
-        View::Editor => "Tab next field  Enter save  Esc cancel",
-        View::Audit => "Esc back",
-        View::Budget => "Esc back",
-        View::Settings => "t toggle  j/k move  o toggle override  d remove  Esc save & back",
-        View::ImportChain => "Esc close",
-        View::SshRemote => "j/k move  Enter connect  Esc back",
-        View::Bundles => "j/k move  Enter install  Esc back",
-        View::Sync => "j/k move  Enter init/snap  r rstor  R remote  p push  P pull  Esc back",
-    };
+    let hints = i18n.status_hint(view);
 
     let warning_span = match budget_warning {
         Some(BudgetWarning::None) | None => None,
@@ -62,7 +44,7 @@ pub fn render_status_bar(
     let mut spans = vec![Span::raw(hints)];
     if hot_reload_active {
         spans.push(Span::styled(
-            "  reload:on",
+            i18n.reload_indicator(),
             Style::default().fg(Color::LightGreen),
         ));
     }
@@ -78,13 +60,14 @@ pub fn render_status_bar(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::i18n::{I18n, Locale};
     use ratatui::{Terminal, backend::TestBackend};
 
     fn render_bar(view: View) -> String {
         let backend = TestBackend::new(84, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&view, f.area(), f, None, false))
+            .draw(|f| render_status_bar(&view, f.area(), f, None, false, &I18n::default()))
             .unwrap();
         terminal
             .backend()
@@ -100,7 +83,7 @@ mod tests {
         let backend = TestBackend::new(84, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&View::List, f.area(), f, None, false))
+            .draw(|f| render_status_bar(&View::List, f.area(), f, None, false, &I18n::default()))
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
     }
@@ -110,7 +93,7 @@ mod tests {
         let backend = TestBackend::new(84, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&View::Detail, f.area(), f, None, false))
+            .draw(|f| render_status_bar(&View::Detail, f.area(), f, None, false, &I18n::default()))
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
     }
@@ -147,6 +130,7 @@ mod tests {
                     f,
                     Some(&BudgetWarning::Approaching { pct: 85.0 }),
                     false,
+                    &I18n::default(),
                 )
             })
             .unwrap();
@@ -170,6 +154,7 @@ mod tests {
                         truncated_skills: 2,
                     }),
                     false,
+                    &I18n::default(),
                 )
             })
             .unwrap();
@@ -183,10 +168,32 @@ mod tests {
         let backend = TestBackend::new(90, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&View::List, f.area(), f, None, true))
+            .draw(|f| render_status_bar(&View::List, f.area(), f, None, true, &I18n::default()))
             .unwrap();
         let buf = terminal.backend().buffer().clone();
         let text: String = buf.content().iter().map(|c| c.symbol()).collect();
         assert!(text.contains("reload:on"));
+    }
+
+    #[test]
+    fn pt_br_list_view_shows_portuguese_quit() {
+        let rendered = render_bar_locale(View::List, &I18n::new(Locale::PtBr));
+        assert!(rendered.contains("sair"));
+        assert!(!rendered.contains("quit"));
+    }
+
+    fn render_bar_locale(view: View, i18n: &I18n) -> String {
+        let backend = TestBackend::new(90, 1);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| render_status_bar(&view, f.area(), f, None, false, i18n))
+            .unwrap();
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol().to_string())
+            .collect()
     }
 }

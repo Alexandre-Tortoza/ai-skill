@@ -101,6 +101,22 @@ case-insensitively and ignore Shift. `quit` always also accepts `Ctrl-C`.
 Wizards and contextual keys (navigation, confirm/cancel) remain on their
 built-in bindings in this first slice.
 
+### Localization
+
+The TUI ships with English (`en`, the default) and Brazilian Portuguese
+(`pt-BR`). Set the `locale` field to switch the interface language for
+panel titles, status-bar hints, the help overlay and the security scan
+overlay:
+
+```json
+{
+  "locale": "pt-BR"
+}
+```
+
+Unrecognized or missing values fall back to English. The `--json` and
+`--markdown` CLI reports remain in English regardless of this setting.
+
 ## Views (Modes)
 
 The TUI has 11 views, each accessed by a key binding. The status bar at the bottom shows context-sensitive hints for the active view.

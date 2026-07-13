@@ -32,6 +32,8 @@ struct RawConfig {
     proxy: Option<String>,
     #[serde(default = "ai_skill_core::config::default_stale_after_days")]
     stale_after_days: u64,
+    #[serde(default)]
+    locale: Option<String>,
 }
 
 impl From<RawConfig> for TuiConfig {
@@ -42,6 +44,7 @@ impl From<RawConfig> for TuiConfig {
             keymap: r.keymap,
             proxy: r.proxy,
             stale_after_days: r.stale_after_days,
+            locale: r.locale,
         }
     }
 }
@@ -54,6 +57,7 @@ impl From<TuiConfig> for RawConfig {
             keymap: c.keymap,
             proxy: c.proxy,
             stale_after_days: c.stale_after_days,
+            locale: c.locale,
         }
     }
 }
@@ -129,6 +133,7 @@ mod tests {
             keymap: [("quit".into(), "q".into())].into_iter().collect(),
             proxy: Some("http://proxy:8080".into()),
             stale_after_days: 30,
+            locale: Some("pt-BR".into()),
         };
         store.write(&config).unwrap();
         let read_back = store.read().unwrap();

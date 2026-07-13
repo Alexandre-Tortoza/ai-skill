@@ -2,9 +2,11 @@
 
 mod app;
 mod event;
+mod i18n;
 mod terminal;
 mod ui;
 
+use i18n::I18n;
 use ui::theme::Theme;
 
 use ai_skill_adapters::{
@@ -53,6 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = config_store.read().unwrap_or_default();
     let stale_after_days = config.stale_after_days;
     let theme = Theme::from_config(&config.theme);
+    let i18n = I18n::from_config(config.locale.as_deref());
 
     let mut repo = FsSkillRepository::from_env()?;
     repo.add_custom_paths(config.custom_agent_paths.clone());
@@ -175,7 +178,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         main_area,
                         f,
                     );
-                    ui::help_overlay::render_help_overlay(main_area, f);
+                    ui::help_overlay::render_help_overlay(main_area, f, &i18n);
                 }
                 View::Confirm => {
                     ui::installed_panel::render_installed_panel(
@@ -197,7 +200,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                 }
                 View::ScanReport => {
-                    ui::scan_report::render_scan_report(&app.scan_findings, &theme, main_area, f);
+                    ui::scan_report::render_scan_report(
+                        &app.scan_findings,
+                        &theme,
+                        main_area,
+                        f,
+                        &i18n,
+                    );
                 }
                 View::Profiles => {
                     ui::profiles_panel::render_profiles_panel(
@@ -222,6 +231,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         &theme,
                         main_area,
                         f,
+                        &i18n,
                     );
                 }
                 View::Budget => {
@@ -237,6 +247,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             &app.settings_state,
                             chunks[0],
                             f,
+                            &i18n,
                         );
                     }
                     ui::settings_panel::render_config_panel(
@@ -244,6 +255,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         &app.config_state,
                         chunks[1],
                         f,
+                        &i18n,
                     );
                 }
                 View::ImportChain => {
@@ -285,6 +297,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 f,
                 Some(&warning),
                 hot_reload_active,
+                &i18n,
             );
         })?;
 
