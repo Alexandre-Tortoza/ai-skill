@@ -115,6 +115,8 @@ Binary crate — no public API. Internal architecture:
   - **`keymap`** — `Action` enum and `KeyBindings` for customizable shortcuts (resolved from `config.json`).
    - **`i18n`** — `Locale` (en / pt-BR) and `I18n` for localized UI strings, resolved from `config.json` `locale`. `I18n::from_config(None)` falls back to English.
    - **`diff_panel`** — `render_diff_panel(...)`: color-coded renderer for a skill's upstream diff (`SkillDiff`), reached from the detail view via `d` when an update is available.
+   - **`command_palette`** — `render_command_palette(...)`: floating overlay listing `PaletteCommand`s (`Search`, `Create`, `Audit`, `Budget`, `Profiles`, `Bundles`, `Sync`, `Settings`, `Help`, and selected-skill actions `OpenDetail`/`Edit`/`Disable`/`Remove`/`Update`/`Diff`). Opened with `Ctrl+P`; `Enter` runs the selected command.
+   - **Quit** — `Ctrl+C` must be pressed twice within 3s (`App::request_quit` arms a timer; `quit_warning_active` drives the status-bar warning). `q` no longer quits; `Esc` only closes panels/modals.
 
 The binary entry point in `main.rs` wires real adapters and runs the ratatui event loop.
 

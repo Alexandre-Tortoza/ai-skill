@@ -1,6 +1,5 @@
 ---
 source: tui/src/ui/help_overlay.rs
-assertion_line: 70
 expression: terminal.backend().buffer().clone()
 ---
 Buffer {
@@ -23,8 +22,8 @@ Buffer {
         "          │F1-F4       apply phase preset (init/dev/test/release)    │          ",
         "          │?           show this help                                │          ",
         "          │Esc         go back / close                               │          ",
-        "          │q           quit                                          │          ",
-        "          │Ctrl-C      quit                                          │          ",
+        "          │Ctrl-P      command palette                               │          ",
+        "          │Ctrl-C      quit (press twice)                            │          ",
         "          └──────────────────────────────────────────────────────────┘          ",
         "                                                                                ",
         "                                                                                ",

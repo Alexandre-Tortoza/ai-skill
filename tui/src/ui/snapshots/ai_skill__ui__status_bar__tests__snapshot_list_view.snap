@@ -5,7 +5,7 @@ expression: terminal.backend().buffer().clone()
 Buffer {
     area: Rect { x: 0, y: 0, width: 84, height: 1 },
     content: [
-        "j/k  d  e  n  r  u  a  c  A aud  B bud  S set  s srch  F1-F4  ? quit                ",
+        "↑↓ navigate  Enter details  Ctrl+P commands  Ctrl-C quit                            ",
     ],
     styles: [
         x: 0, y: 0, fg: Black, bg: DarkGray, underline: Reset, modifier: NONE,

@@ -4,13 +4,15 @@ use crate::ui::keymap::{Action, KeyBindings};
 use ai_skill_adapters::ImportChainResult;
 use ai_skill_core::{
     AnyCatalogGateway, Bundle, BundleStore, CatalogEntry, ConfigStore, ConnectionStatus,
-    ContextBudget, ExternalScanner, LintWarning, Phase, Profile, ProfileOp, ProfileStore,
-    ProjectSettings, RemoteHost, RemoteSkill, ScanFinding, Scope, SettingsStore, SignatureVerifier,
-    Skill, SkillCreator, SkillInstaller, SkillMode, SkillSync, SkillToggler, SkillWriter, Snapshot,
-    SshConnector, SyncStatus, TuiConfig, calculate_budget, cross_reference, scan_skill,
+    ContextBudget, DriftState, ExternalScanner, LintWarning, Phase, Profile, ProfileOp,
+    ProfileStore, ProjectSettings, RemoteHost, RemoteSkill, ScanFinding, Scope, SettingsStore,
+    SignatureVerifier, Skill, SkillCreator, SkillInstaller, SkillMode, SkillSync, SkillToggler,
+    SkillWriter, Snapshot, SshConnector, SyncStatus, TuiConfig, calculate_budget, cross_reference,
+    scan_skill,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 use crate::event::AppEvent;
 use crate::ui::settings_panel::{ConfigState, SettingsState};
@@ -118,6 +120,41 @@ pub enum AppAction {
     ActivateProfile { name: String, ops: Vec<ProfileOp> },
     /// Toggle a skill between name-only and full mode.
     ToggleNameOnly { path: PathBuf },
+}
+
+/// A command selectable from the floating command palette.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaletteCommand {
+    /// Open the catalog search panel.
+    Search,
+    /// Open the create-skill wizard.
+    Create,
+    /// Open the audit panel.
+    Audit,
+    /// Open the budget panel.
+    Budget,
+    /// Open the profiles panel.
+    Profiles,
+    /// Open the bundles panel.
+    Bundles,
+    /// Open the sync panel.
+    Sync,
+    /// Open the settings panel.
+    Settings,
+    /// Open the help overlay.
+    Help,
+    /// Open the detail view for the selected skill.
+    OpenDetail,
+    /// Open the editor for the selected skill.
+    Edit,
+    /// Disable the selected skill.
+    Disable,
+    /// Remove the selected skill.
+    Remove,
+    /// Update the selected skill.
+    Update,
+    /// Show the upstream diff for the selected skill.
+    Diff,
 }
 
 /// State for the profiles panel.
@@ -300,6 +337,14 @@ pub struct App<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> {
     pub should_quit: bool,
     pub import_chain_result: Option<ImportChainResult>,
     pub profile_export_message: Option<String>,
+    /// When `Some`, the first `Ctrl-C` was received and a second within 3s quits.
+    pub quit_armed_at: Option<Instant>,
+    /// Whether the floating command palette is open.
+    pub command_palette_open: bool,
+    /// Selected index in the command palette.
+    pub palette_index: usize,
+    /// Commands available in the palette (rebuilt when opened).
+    pub palette_commands: Vec<PaletteCommand>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -371,6 +416,10 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
             should_quit: false,
             import_chain_result: None,
             profile_export_message: None,
+            quit_armed_at: None,
+            command_palette_open: false,
+            palette_index: 0,
+            palette_commands: vec![],
         }
     }
 
@@ -425,9 +474,16 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
     }
 
     pub fn handle_event(&mut self, event: AppEvent) {
+        self.disarm_quit_if_expired();
         match event {
             AppEvent::Key(key) if self.key_bindings.matches(&key, Action::Quit) => {
-                self.should_quit = true;
+                self.request_quit();
+            }
+            AppEvent::Key(key) if self.key_bindings.matches(&key, Action::CommandPalette) => {
+                self.toggle_command_palette();
+            }
+            AppEvent::Key(key) if self.command_palette_open => {
+                self.handle_palette_key(key);
             }
             AppEvent::Key(key) => match self.view {
                 View::List => self.handle_list_key(key),
@@ -450,6 +506,210 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
                 View::Diff => self.handle_diff_key(key),
             },
             AppEvent::Resize => {}
+        }
+    }
+
+    /// Clears the armed-quit timer once the 3s window has elapsed.
+    fn disarm_quit_if_expired(&mut self) {
+        if self
+            .quit_armed_at
+            .is_some_and(|at| at.elapsed() >= Duration::from_secs(3))
+        {
+            self.quit_armed_at = None;
+        }
+    }
+
+    /// First `Ctrl-C` arms a 3s quit window; a second `Ctrl-C` within it quits.
+    fn request_quit(&mut self) {
+        match self.quit_armed_at {
+            Some(at) if at.elapsed() < Duration::from_secs(3) => {
+                self.should_quit = true;
+            }
+            _ => {
+                self.quit_armed_at = Some(Instant::now());
+            }
+        }
+    }
+
+    /// True while the "press Ctrl-C again to quit" warning should show.
+    pub fn quit_warning_active(&self) -> bool {
+        self.quit_armed_at
+            .map(|at| at.elapsed() < Duration::from_secs(3))
+            .unwrap_or(false)
+    }
+
+    /// Opens (or closes) the floating command palette.
+    fn toggle_command_palette(&mut self) {
+        if self.command_palette_open {
+            self.command_palette_open = false;
+        } else {
+            self.palette_index = 0;
+            self.palette_commands = self.build_palette_commands();
+            self.command_palette_open = true;
+        }
+    }
+
+    /// Builds the palette command list for the current context.
+    fn build_palette_commands(&self) -> Vec<PaletteCommand> {
+        let mut cmds = vec![
+            PaletteCommand::Search,
+            PaletteCommand::Create,
+            PaletteCommand::Audit,
+            PaletteCommand::Budget,
+            PaletteCommand::Profiles,
+            PaletteCommand::Bundles,
+            PaletteCommand::Sync,
+            PaletteCommand::Settings,
+            PaletteCommand::Help,
+        ];
+        if self.selected_skill().is_some() {
+            cmds.push(PaletteCommand::OpenDetail);
+            cmds.push(PaletteCommand::Edit);
+            cmds.push(PaletteCommand::Disable);
+            cmds.push(PaletteCommand::Remove);
+            cmds.push(PaletteCommand::Update);
+            if self
+                .selected_skill()
+                .is_some_and(|s| matches!(s.drift_state, DriftState::UpdateAvailable { .. }))
+            {
+                cmds.push(PaletteCommand::Diff);
+            }
+        }
+        cmds
+    }
+
+    /// Handles keys while the command palette is open.
+    fn handle_palette_key(&mut self, key: crossterm::event::KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.command_palette_open = false;
+            }
+            KeyCode::Up | KeyCode::Char('k')
+                if key.modifiers == KeyModifiers::NONE && !self.palette_commands.is_empty() =>
+            {
+                self.palette_index = self.palette_index.saturating_sub(1);
+            }
+            KeyCode::Down | KeyCode::Char('j')
+                if key.modifiers == KeyModifiers::NONE && !self.palette_commands.is_empty() =>
+            {
+                let max = self.palette_commands.len() - 1;
+                if self.palette_index < max {
+                    self.palette_index += 1;
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(cmd) = self.palette_commands.get(self.palette_index).copied() {
+                    self.execute_palette_command(cmd);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Executes the selected palette command and closes the palette.
+    fn execute_palette_command(&mut self, cmd: PaletteCommand) {
+        self.command_palette_open = false;
+        match cmd {
+            PaletteCommand::Search => {
+                self.search_state = SearchState::default();
+                self.view = View::Search;
+            }
+            PaletteCommand::Create => {
+                self.create_wizard_state = CreateWizardState::default();
+                self.view = View::CreateWizard;
+            }
+            PaletteCommand::Audit => {
+                self.view = View::Audit;
+            }
+            PaletteCommand::Budget => {
+                self.view = View::Budget;
+            }
+            PaletteCommand::Profiles => {
+                self.profile_state.profiles = self.profile_store.list().unwrap_or_default();
+                self.profile_state.selected_index = 0;
+                self.profile_state.creating = false;
+                self.profile_state.new_name_input = String::new();
+                self.view = View::Profiles;
+            }
+            PaletteCommand::Bundles => {
+                self.bundle_state = BundleState {
+                    bundles: self.bundle_store.list().unwrap_or_default(),
+                    ..BundleState::default()
+                };
+                self.view = View::Bundles;
+            }
+            PaletteCommand::Sync => {
+                self.refresh_sync_state();
+                self.view = View::Sync;
+            }
+            PaletteCommand::Settings => {
+                self.view = View::Settings;
+            }
+            PaletteCommand::Help => {
+                self.view = View::Help;
+            }
+            PaletteCommand::OpenDetail => {
+                if self.selected_skill().is_some() {
+                    self.detail_scroll = 0;
+                    self.view = View::Detail;
+                }
+            }
+            PaletteCommand::Edit => {
+                if let Some(skill) = self.selected_skill() {
+                    let name_input = skill.name.clone();
+                    let agents_input = skill.agents.join(", ");
+                    let tags_input = skill.tags.join(", ");
+                    let skill = skill.clone();
+                    let warnings = ai_skill_core::lint_content(
+                        skill.manifest_content.as_deref().unwrap_or(""),
+                        &self.all_skills,
+                        &name_input,
+                        Some(&skill.name),
+                    );
+                    self.editor_state = Some(EditorState {
+                        skill,
+                        field: EditField::default(),
+                        name_input,
+                        agents_input,
+                        tags_input,
+                        warnings,
+                    });
+                    self.view = View::Editor;
+                }
+            }
+            PaletteCommand::Disable => {
+                if let Some(skill) = self.selected_skill() {
+                    let path = skill.path.clone();
+                    self.pending_action = Some(AppAction::Disable { path });
+                    self.view_before_confirm = View::List;
+                    self.view = View::Confirm;
+                }
+            }
+            PaletteCommand::Remove => {
+                if let Some(skill) = self.selected_skill() {
+                    let path = skill.path.clone();
+                    self.pending_action = Some(AppAction::Remove { path });
+                    self.view_before_confirm = View::List;
+                    self.view = View::Confirm;
+                }
+            }
+            PaletteCommand::Update => {
+                if let Some(skill) = self.selected_skill() {
+                    let path = skill.path.clone();
+                    self.pending_action = Some(AppAction::Update { path });
+                    self.view_before_confirm = View::List;
+                    self.view = View::Confirm;
+                }
+            }
+            PaletteCommand::Diff => {
+                if self
+                    .selected_skill()
+                    .is_some_and(|s| matches!(s.drift_state, DriftState::UpdateAvailable { .. }))
+                {
+                    self.diff_scroll = 0;
+                    self.view = View::Diff;
+                }
+            }
         }
     }
 
@@ -549,7 +809,7 @@ impl<G: AnyCatalogGateway, I: SkillInstaller, T: SkillToggler> App<G, I, T> {
         let visible_len = self.visible_skills().len();
         match key.code {
             KeyCode::Esc => {
-                self.should_quit = true;
+                // No parent view to return to from the list; do nothing.
             }
             KeyCode::Down | KeyCode::Char('j')
                 if key.modifiers == KeyModifiers::NONE
@@ -1883,24 +2143,82 @@ mod tests {
     // ── quit ──────────────────────────────────────────────────────────────────
 
     #[test]
-    fn q_key_sets_should_quit() {
+    fn q_key_no_longer_quits() {
         let mut app = make_app(make_skills(1));
         app.handle_event(key(KeyCode::Char('q')));
-        assert!(app.should_quit);
+        assert!(!app.should_quit);
     }
 
     #[test]
-    fn ctrl_c_sets_should_quit() {
+    fn first_ctrl_c_arms_quit_without_quitting() {
         let mut app = make_app(make_skills(1));
+        app.handle_event(ctrl(KeyCode::Char('c')));
+        assert!(!app.should_quit);
+        assert!(app.quit_warning_active());
+    }
+
+    #[test]
+    fn second_ctrl_c_within_window_quits() {
+        let mut app = make_app(make_skills(1));
+        app.handle_event(ctrl(KeyCode::Char('c')));
         app.handle_event(ctrl(KeyCode::Char('c')));
         assert!(app.should_quit);
     }
 
     #[test]
-    fn esc_in_list_view_sets_should_quit() {
+    fn esc_in_list_view_does_not_quit() {
         let mut app = make_app(make_skills(1));
         app.handle_event(key(KeyCode::Esc));
-        assert!(app.should_quit);
+        assert!(!app.should_quit);
+    }
+
+    // ── command palette ───────────────────────────────────────────────────────
+
+    #[test]
+    fn ctrl_p_opens_command_palette() {
+        let mut app = make_app(make_skills(3));
+        app.handle_event(ctrl(KeyCode::Char('p')));
+        assert!(app.command_palette_open);
+        assert!(!app.palette_commands.is_empty());
+    }
+
+    #[test]
+    fn ctrl_p_toggles_command_palette_closed() {
+        let mut app = make_app(make_skills(3));
+        app.handle_event(ctrl(KeyCode::Char('p')));
+        app.handle_event(ctrl(KeyCode::Char('p')));
+        assert!(!app.command_palette_open);
+    }
+
+    #[test]
+    fn palette_esc_closes() {
+        let mut app = make_app(make_skills(3));
+        app.handle_event(ctrl(KeyCode::Char('p')));
+        app.handle_event(key(KeyCode::Esc));
+        assert!(!app.command_palette_open);
+    }
+
+    #[test]
+    fn palette_includes_selected_skill_commands() {
+        let mut app = make_app(make_skills(3));
+        app.handle_event(ctrl(KeyCode::Char('p')));
+        assert!(app.palette_commands.contains(&PaletteCommand::OpenDetail));
+        assert!(app.palette_commands.contains(&PaletteCommand::Remove));
+    }
+
+    #[test]
+    fn palette_enter_executes_command() {
+        let mut app = make_app(make_skills(3));
+        app.handle_event(ctrl(KeyCode::Char('p')));
+        let idx = app
+            .palette_commands
+            .iter()
+            .position(|c| *c == PaletteCommand::Audit)
+            .unwrap();
+        app.palette_index = idx;
+        app.handle_event(key(KeyCode::Enter));
+        assert!(!app.command_palette_open);
+        assert_eq!(app.view, View::Audit);
     }
 
     // ── list navigation ───────────────────────────────────────────────────────

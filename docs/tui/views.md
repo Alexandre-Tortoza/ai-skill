@@ -112,6 +112,17 @@ Color-coded upstream diff of a skill's `SKILL.md` (`git diff HEAD..@{u}`), shown
 update is available (opened from the Detail view via `d`). Additions are green, removals red,
 headers accented. Requires the skill to be a Git checkout with an upstream tracking branch.
 
+## Command Palette
+
+**Overlay:** `command_palette::render_command_palette`
+
+Opened with `Ctrl+P` from any view. Lists every available action as a searchable list:
+
+- Search catalog, New skill, Audit report, Context budget, Profiles & presets, Bundles, Git sync, Settings, Help
+- When a skill is selected in the list: Open detail, Edit skill, Disable, Remove, Update, and Upstream diff (only when an update is available)
+
+Navigation: `↑`/`↓` (or `j`/`k`) to move, `Enter` to run the selected command, `Esc` to close. This removes the need to expose every shortcut on the status bar.
+
 ## Key Bindings by View
 
 | Key | List | Detail | Search | Help | Confirm | Wizard | Scan | Profiles | Create | Editor | Audit | Diff |
@@ -119,8 +130,9 @@ headers accented. Requires the skill to be a Git checkout with an upstream track
 | `↑`/`↓` | Navigate | Scroll | Navigate | — | — | — | Scroll | Navigate | — | — | Scroll | Scroll |
 | `j`/`k` | — | — | — | — | — | — | — | — | — | — | — | Scroll |
 | `Enter` | Detail | — | Wizard | — | Confirm | Next | Proceed | Activate | Next | Save | — | — |
-| `Esc` | Quit | Back | Back | Close | Cancel | Cancel | Cancel | Back | Cancel | Cancel | Back | Back |
-| `q` | Quit | Back | — | Close | — | — | — | — | — | — | — | Quit |
+| `Esc` | — | Back | Back | Close | Cancel | Cancel | Cancel | Back | Cancel | Cancel | Back | Back |
+| `Ctrl+P` | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette | Palette |
+| `Ctrl-C` | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 | Quit×2 |
 | `/` | Search | — | — | — | — | — | — | — | — | — | — | — |
 | `Tab` | Filter | — | — | — | — | Scope | — | — | Step | Field | — | — |
 | `Space` | Select | — | — | — | — | Agent | — | — | — | — | — | — |

@@ -5,7 +5,7 @@ expression: terminal.backend().buffer().clone()
 Buffer {
     area: Rect { x: 0, y: 0, width: 84, height: 1 },
     content: [
-        "j/k scroll  d diff  Esc back  q quit                                                ",
+        "↑↓ scroll  d diff  Esc back  Ctrl+P commands                                        ",
     ],
     styles: [
         x: 0, y: 0, fg: Black, bg: DarkGray, underline: Reset, modifier: NONE,

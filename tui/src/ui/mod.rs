@@ -3,6 +3,7 @@
 pub mod audit_panel;
 pub mod budget_panel;
 pub mod bundles_panel;
+pub mod command_palette;
 pub mod confirm_panel;
 pub mod create_wizard;
 pub mod detail_panel;

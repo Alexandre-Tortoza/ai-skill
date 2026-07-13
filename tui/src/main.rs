@@ -312,8 +312,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 f,
                 Some(&warning),
                 hot_reload_active,
+                app.quit_warning_active(),
+                app.command_palette_open,
                 &i18n,
             );
+
+            if app.command_palette_open {
+                ui::command_palette::render_command_palette(
+                    &app.palette_commands,
+                    app.palette_index,
+                    f.area(),
+                    f,
+                    &i18n,
+                );
+            }
         })?;
 
         if watcher

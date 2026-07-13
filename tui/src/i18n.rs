@@ -8,7 +8,7 @@
 //! and easy to scan. Each [`I18n`] method returns the localized string for the
 //! active locale.
 
-use crate::app::View;
+use crate::app::{PaletteCommand, View};
 use ai_skill_core::DiffError;
 
 /// Supported UI locales.
@@ -76,10 +76,8 @@ impl I18n {
     /// Returns the per-view key hint line.
     pub fn status_hint(&self, view: &View) -> &'static str {
         match (self.locale, *view) {
-            (Locale::En, View::List) => {
-                "j/k  d  e  n  r  u  a  c  A aud  B bud  S set  s srch  F1-F4  ? quit"
-            }
-            (Locale::En, View::Detail) => "j/k scroll  d diff  Esc back  q quit",
+            (Locale::En, View::List) => "↑↓ navigate  Enter details  Ctrl+P commands  Ctrl-C quit",
+            (Locale::En, View::Detail) => "↑↓ scroll  d diff  Esc back  Ctrl+P commands",
             (Locale::En, View::Search) => "type search  j/k move  Enter install  Esc back",
             (Locale::En, View::Help) => "Esc close",
             (Locale::En, View::Confirm) => "y confirm  n / Esc cancel",
@@ -105,9 +103,9 @@ impl I18n {
             }
             (Locale::En, View::Diff) => "j/k scroll  Esc back",
             (Locale::PtBr, View::List) => {
-                "j/k  d  e  n  r  u  a  c  A aud  B bud  S cfg  s busca  F1-F4  ? sair"
+                "↑↓ navegar  Enter detalhes  Ctrl+P comandos  Ctrl-C sair"
             }
-            (Locale::PtBr, View::Detail) => "j/k rolar  d diff  Esc voltar  q sair",
+            (Locale::PtBr, View::Detail) => "↑↓ rolar  d diff  Esc voltar  Ctrl+P comandos",
             (Locale::PtBr, View::Search) => "digite busca  j/k mover  Enter instalar  Esc voltar",
             (Locale::PtBr, View::Help) => "Esc fechar",
             (Locale::PtBr, View::Confirm) => "s confirmar  n / Esc cancelar",
@@ -142,6 +140,68 @@ impl I18n {
         match self.locale {
             Locale::En => "  reload:on",
             Locale::PtBr => "  recarregar:on",
+        }
+    }
+
+    // --- Quit confirmation / command palette ---------------------------------
+
+    /// Status-bar hint shown while the command palette is open.
+    pub fn palette_hint(&self) -> &'static str {
+        match self.locale {
+            Locale::En => "↑↓ move  Enter run  Esc close",
+            Locale::PtBr => "↑↓ mover  Enter executar  Esc fechar",
+        }
+    }
+
+    /// Warning shown on the status bar after the first `Ctrl-C`.
+    pub fn quit_warning(&self) -> &'static str {
+        match self.locale {
+            Locale::En => "  press Ctrl-C again to quit  ",
+            Locale::PtBr => "  pressione Ctrl-C novamente para sair  ",
+        }
+    }
+
+    /// Title for the command palette overlay.
+    pub fn palette_title(&self) -> &'static str {
+        match self.locale {
+            Locale::En => "Commands",
+            Locale::PtBr => "Comandos",
+        }
+    }
+
+    /// Localized label for a palette command.
+    pub fn palette_command_label(&self, cmd: PaletteCommand) -> &'static str {
+        match (self.locale, cmd) {
+            (Locale::En, PaletteCommand::Search) => "Search catalog",
+            (Locale::En, PaletteCommand::Create) => "New skill",
+            (Locale::En, PaletteCommand::Audit) => "Audit report",
+            (Locale::En, PaletteCommand::Budget) => "Context budget",
+            (Locale::En, PaletteCommand::Profiles) => "Profiles & presets",
+            (Locale::En, PaletteCommand::Bundles) => "Bundles",
+            (Locale::En, PaletteCommand::Sync) => "Git sync",
+            (Locale::En, PaletteCommand::Settings) => "Settings",
+            (Locale::En, PaletteCommand::Help) => "Help",
+            (Locale::En, PaletteCommand::OpenDetail) => "Open detail",
+            (Locale::En, PaletteCommand::Edit) => "Edit skill",
+            (Locale::En, PaletteCommand::Disable) => "Disable skill",
+            (Locale::En, PaletteCommand::Remove) => "Remove skill",
+            (Locale::En, PaletteCommand::Update) => "Update skill",
+            (Locale::En, PaletteCommand::Diff) => "Upstream diff",
+            (Locale::PtBr, PaletteCommand::Search) => "Buscar no catálogo",
+            (Locale::PtBr, PaletteCommand::Create) => "Nova skill",
+            (Locale::PtBr, PaletteCommand::Audit) => "Relatório de auditoria",
+            (Locale::PtBr, PaletteCommand::Budget) => "Orçamento de contexto",
+            (Locale::PtBr, PaletteCommand::Profiles) => "Perfis & predefinições",
+            (Locale::PtBr, PaletteCommand::Bundles) => "Bundles",
+            (Locale::PtBr, PaletteCommand::Sync) => "Sincronizar git",
+            (Locale::PtBr, PaletteCommand::Settings) => "Configurações",
+            (Locale::PtBr, PaletteCommand::Help) => "Ajuda",
+            (Locale::PtBr, PaletteCommand::OpenDetail) => "Abrir detalhe",
+            (Locale::PtBr, PaletteCommand::Edit) => "Editar skill",
+            (Locale::PtBr, PaletteCommand::Disable) => "Desativar skill",
+            (Locale::PtBr, PaletteCommand::Remove) => "Remover skill",
+            (Locale::PtBr, PaletteCommand::Update) => "Atualizar skill",
+            (Locale::PtBr, PaletteCommand::Diff) => "Diff upstream",
         }
     }
 
@@ -448,8 +508,8 @@ p           profiles / presets
 F1-F4       apply phase preset (init/dev/test/release)
 ?           show this help
 Esc         go back / close
-q           quit
-Ctrl-C      quit
+Ctrl-P      command palette
+Ctrl-C      quit (press twice)
 
 --- in detail view ---
 o           toggle skill auto-trigger
@@ -474,8 +534,8 @@ p           perfis / predefinições
 F1-F4       aplicar predefinição de fase (init/dev/test/release)
 ?           mostrar esta ajuda
 Esc         voltar / fechar
-q           sair
-Ctrl-C      sair
+Ctrl-P      paleta de comandos
+Ctrl-C      sair (pressione duas vezes)
 
 --- na view de detalhe ---
 o           alternar auto-disparo da skill

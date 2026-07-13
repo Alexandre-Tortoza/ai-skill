@@ -139,7 +139,13 @@ Shows all installed skills grouped by scope (Global, Project).
 | `Space` | Toggle multi-select |
 | `d` / `r` / `u` | Disable / remove / update selected skills (with confirmation) |
 | `?` | Open help overlay |
-| `q` / `Esc` | Quit application |
+| `Ctrl+P` | Open the command palette (all actions) |
+| `Ctrl+C` | Quit (press twice; a warning appears for 3s) |
+
+The **command palette** (`Ctrl+P`) lists every action — search, new skill, audit, budget,
+profiles, bundles, sync, settings, help, and, when a skill is selected, open detail / edit /
+disable / remove / update / upstream diff. Use `↑`/`↓` (or `j`/`k`) to move, `Enter` to run,
+`Esc` to close.
 
 Validation states are shown as colored badges:
 - **Valid** — green
@@ -162,7 +168,8 @@ Shows full metadata and the rendered `SKILL.md` body for the selected skill.
 |---|---|
 | `↑` / `↓` | Scroll content |
 | `d` | Open the upstream diff viewer (only when an update is available) |
-| `Esc` / `q` | Return to list |
+| `Ctrl+P` | Open the command palette |
+| `Esc` | Return to list |
 
 ### Diff View
 

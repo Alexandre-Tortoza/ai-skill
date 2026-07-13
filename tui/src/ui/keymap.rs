@@ -45,6 +45,8 @@ pub enum Action {
     Remove,
     /// Update the selected skill.
     Update,
+    /// Open the floating command palette.
+    CommandPalette,
 }
 
 impl Action {
@@ -68,6 +70,7 @@ impl Action {
             Action::Enable => "enable",
             Action::Remove => "remove",
             Action::Update => "update",
+            Action::CommandPalette => "command_palette",
         }
     }
 }
@@ -81,7 +84,6 @@ pub struct KeyBindings {
 impl Default for KeyBindings {
     fn default() -> Self {
         let mut bindings = HashMap::new();
-        bindings.insert(Action::Quit, (KeyCode::Char('q'), KeyModifiers::NONE));
         bindings.insert(Action::Help, (KeyCode::Char('?'), KeyModifiers::NONE));
         bindings.insert(Action::Audit, (KeyCode::Char('A'), KeyModifiers::NONE));
         bindings.insert(Action::Search, (KeyCode::Char('s'), KeyModifiers::NONE));
@@ -101,6 +103,10 @@ impl Default for KeyBindings {
         bindings.insert(Action::Enable, (KeyCode::Char('e'), KeyModifiers::NONE));
         bindings.insert(Action::Remove, (KeyCode::Char('r'), KeyModifiers::NONE));
         bindings.insert(Action::Update, (KeyCode::Char('u'), KeyModifiers::NONE));
+        bindings.insert(
+            Action::CommandPalette,
+            (KeyCode::Char('p'), KeyModifiers::CONTROL),
+        );
         KeyBindings { bindings }
     }
 }
@@ -161,6 +167,7 @@ fn all_actions() -> &'static [Action] {
         Action::Enable,
         Action::Remove,
         Action::Update,
+        Action::CommandPalette,
     ]
 }
 
@@ -230,15 +237,24 @@ mod tests {
     }
 
     #[test]
-    fn default_quit_matches_q() {
+    fn default_quit_no_longer_matches_q() {
         let bindings = KeyBindings::default();
-        assert!(bindings.matches(&key('q'), Action::Quit));
+        assert!(!bindings.matches(&key('q'), Action::Quit));
     }
 
     #[test]
     fn default_quit_matches_ctrl_c() {
         let bindings = KeyBindings::default();
         assert!(bindings.matches(&key_with('c', KeyModifiers::CONTROL), Action::Quit));
+    }
+
+    #[test]
+    fn default_command_palette_matches_ctrl_p() {
+        let bindings = KeyBindings::default();
+        assert!(bindings.matches(
+            &key_with('p', KeyModifiers::CONTROL),
+            Action::CommandPalette
+        ));
     }
 
     #[test]
@@ -274,7 +290,11 @@ mod tests {
         let mut map = HashMap::new();
         map.insert("not_an_action".to_string(), "x".to_string());
         let bindings = KeyBindings::from_config(&map);
-        assert!(bindings.matches(&key('q'), Action::Quit));
+        assert!(bindings.matches(&key_with('c', KeyModifiers::CONTROL), Action::Quit));
+        assert!(bindings.matches(
+            &key_with('p', KeyModifiers::CONTROL),
+            Action::CommandPalette
+        ));
     }
 
     #[test]

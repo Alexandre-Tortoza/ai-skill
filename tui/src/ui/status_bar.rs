@@ -11,15 +11,22 @@ use ratatui::{
 };
 
 /// Renders a single-line status bar with view-specific key hints and optional budget warning.
+#[allow(clippy::too_many_arguments)]
 pub fn render_status_bar(
     view: &View,
     area: Rect,
     frame: &mut Frame,
     budget_warning: Option<&BudgetWarning>,
     hot_reload_active: bool,
+    quit_armed: bool,
+    palette_open: bool,
     i18n: &I18n,
 ) {
-    let hints = i18n.status_hint(view);
+    let hints = if palette_open {
+        i18n.palette_hint()
+    } else {
+        i18n.status_hint(view)
+    };
 
     let warning_span = match budget_warning {
         Some(BudgetWarning::None) | None => None,
@@ -42,6 +49,15 @@ pub fn render_status_bar(
     };
 
     let mut spans = vec![Span::raw(hints)];
+    if quit_armed {
+        spans.push(Span::styled(
+            i18n.quit_warning(),
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Yellow)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ));
+    }
     if hot_reload_active {
         spans.push(Span::styled(
             i18n.reload_indicator(),
@@ -67,7 +83,18 @@ mod tests {
         let backend = TestBackend::new(84, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&view, f.area(), f, None, false, &I18n::default()))
+            .draw(|f| {
+                render_status_bar(
+                    &view,
+                    f.area(),
+                    f,
+                    None,
+                    false,
+                    false,
+                    false,
+                    &I18n::default(),
+                )
+            })
             .unwrap();
         terminal
             .backend()
@@ -83,7 +110,18 @@ mod tests {
         let backend = TestBackend::new(84, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&View::List, f.area(), f, None, false, &I18n::default()))
+            .draw(|f| {
+                render_status_bar(
+                    &View::List,
+                    f.area(),
+                    f,
+                    None,
+                    false,
+                    false,
+                    false,
+                    &I18n::default(),
+                )
+            })
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
     }
@@ -93,7 +131,18 @@ mod tests {
         let backend = TestBackend::new(84, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&View::Detail, f.area(), f, None, false, &I18n::default()))
+            .draw(|f| {
+                render_status_bar(
+                    &View::Detail,
+                    f.area(),
+                    f,
+                    None,
+                    false,
+                    false,
+                    false,
+                    &I18n::default(),
+                )
+            })
             .unwrap();
         insta::assert_debug_snapshot!(terminal.backend().buffer().clone());
     }
@@ -130,6 +179,8 @@ mod tests {
                     f,
                     Some(&BudgetWarning::Approaching { pct: 85.0 }),
                     false,
+                    false,
+                    false,
                     &I18n::default(),
                 )
             })
@@ -154,6 +205,8 @@ mod tests {
                         truncated_skills: 2,
                     }),
                     false,
+                    false,
+                    false,
                     &I18n::default(),
                 )
             })
@@ -168,11 +221,68 @@ mod tests {
         let backend = TestBackend::new(90, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&View::List, f.area(), f, None, true, &I18n::default()))
+            .draw(|f| {
+                render_status_bar(
+                    &View::List,
+                    f.area(),
+                    f,
+                    None,
+                    true,
+                    false,
+                    false,
+                    &I18n::default(),
+                )
+            })
             .unwrap();
         let buf = terminal.backend().buffer().clone();
         let text: String = buf.content().iter().map(|c| c.symbol()).collect();
         assert!(text.contains("reload:on"));
+    }
+
+    #[test]
+    fn quit_armed_shows_warning() {
+        let backend = TestBackend::new(90, 1);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                render_status_bar(
+                    &View::List,
+                    f.area(),
+                    f,
+                    None,
+                    false,
+                    true,
+                    false,
+                    &I18n::default(),
+                )
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer().clone();
+        let text: String = buf.content().iter().map(|c| c.symbol()).collect();
+        assert!(text.to_lowercase().contains("ctrl-c"));
+    }
+
+    #[test]
+    fn palette_open_shows_palette_hint() {
+        let backend = TestBackend::new(90, 1);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                render_status_bar(
+                    &View::List,
+                    f.area(),
+                    f,
+                    None,
+                    false,
+                    false,
+                    true,
+                    &I18n::default(),
+                )
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer().clone();
+        let text: String = buf.content().iter().map(|c| c.symbol()).collect();
+        assert!(text.to_lowercase().contains("enter"));
     }
 
     #[test]
@@ -186,7 +296,7 @@ mod tests {
         let backend = TestBackend::new(90, 1);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
-            .draw(|f| render_status_bar(&view, f.area(), f, None, false, i18n))
+            .draw(|f| render_status_bar(&view, f.area(), f, None, false, false, false, i18n))
             .unwrap();
         terminal
             .backend()
