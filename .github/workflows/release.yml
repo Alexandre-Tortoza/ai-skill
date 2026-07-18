@@ -547,7 +547,7 @@ jobs:
           perl -pi -e "s|@VERSION@|$number|g; s|@SOURCE_URL@|$source_url|g; s|@SOURCE_SHA@|$source_sha|g" aur/ai-skill/PKGBUILD
 
       - name: Publish ai-skill-bin to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
         with:
           pkgname: ai-skill-bin
           pkgbuild: aur/ai-skill-bin/PKGBUILD
@@ -557,7 +557,7 @@ jobs:
           commit_message: Update ai-skill-bin to ${{ steps.version.outputs.version }}
 
       - name: Publish ai-skill to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
         with:
           pkgname: ai-skill
           pkgbuild: aur/ai-skill/PKGBUILD
